@@ -51,28 +51,28 @@ enum AutoTrimState: Equatable {
 final class CleanerModel: ObservableObject {
     static let catalog: [CleanCategory] = [
         CleanCategory(id: "logs", title: "System logs",
-                      detail: "The diagnostic log archive. It refills over a few days.",
+                      detail: "Diagnostic logs",
                       symbol: "doc.text.magnifyingglass"),
         CleanCategory(id: "downloads", title: "Abandoned downloads",
-                      detail: "Temp files from downloads that never finished.",
+                      detail: "Unfinished files",
                       symbol: "arrow.down.circle"),
         CleanCategory(id: "crash", title: "Crash reports",
-                      detail: "Old crash, hang and analytics reports.",
+                      detail: "Old crash reports",
                       symbol: "exclamationmark.triangle"),
         CleanCategory(id: "syscache", title: "System caches",
-                      detail: "Symbol, Memoji and thumbnail caches, plus temp copies.",
+                      detail: "Symbols, Memoji",
                       symbol: "gearshape.2"),
         CleanCategory(id: "appcache", title: "App caches",
-                      detail: "Each app's cache and temp folders.",
+                      detail: "Every app's cache",
                       symbol: "square.stack.3d.up"),
         CleanCategory(id: "previews", title: "Messages previews",
-                      detail: "Attachment thumbnails. Rebuilt as you scroll.",
+                      detail: "Chat thumbnails",
                       symbol: "message"),
         CleanCategory(id: "maps", title: "Maps tiles",
-                      detail: "Map cache. Leave off if you use offline maps.",
+                      detail: "Apple Maps cache",
                       symbol: "map"),
         CleanCategory(id: "installers", title: "Leftover installers",
-                      detail: "IPAs and debs left in app inboxes.",
+                      detail: "IPAs and debs",
                       symbol: "shippingbox"),
     ]
 
@@ -390,7 +390,8 @@ final class CleanerModel: ObservableObject {
     // MARK: - Formatting
 
     static func format(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        if bytes <= 0 { return "0 KB" }   // the formatter would say "Zero KB"
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     static func currentFreeBytes() -> Int64 {

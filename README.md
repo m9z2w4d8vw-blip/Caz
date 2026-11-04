@@ -288,6 +288,9 @@ Dopamine's title is a picture, not live text: `Dopamine.imageset` holds it at 1x
 works the same way: a `Wordmark` image in `Assets.xcassets` is used when it's there, at Dopamine's 40 pt height.
 Without it, Caz uses the first `.ttf` or `.otf` in `Caz/Resources`, then SF Rounded Bold.
 
+[Fonarto](https://www.fontspace.com/fonarto-2-font-f104632) is by Locomotype (Arwan Sutanto) and is free for personal
+and commercial use. Dopamine's title matches its **Bold** weight.
+
 ## Building and testing
 
 ```mermaid

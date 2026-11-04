@@ -60,32 +60,9 @@ struct CategoriesWindow: View {
             List {
                 Section {
                     ForEach(model.categories) { category in
-                        Toggle(isOn: Binding(
-                            get: { category.enabled },
-                            set: { model.setEnabled(category.id, $0) }
-                        )) {
-                            HStack(spacing: 12) {
-                                Image(systemName: category.symbol)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(Theme.foreground)
-                                    .frame(width: 22)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(category.title)
-                                        .foregroundStyle(.white)
-                                    Text(category.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(Color.white.opacity(0.55))
-                                }
-                                Spacer(minLength: 6)
-                                if let bytes = model.displayBytes(for: category) {
-                                    Text(CleanerModel.format(bytes))
-                                        .font(.footnote.monospacedDigit())
-                                        .foregroundStyle(Color.white.opacity(bytes > 0 ? 0.85 : 0.4))
-                                }
-                            }
-                        }
-                        .windowRow()
-                        .disabled(model.isBusy)
+                        CategoryRow(model: model, category: category)
+                            .windowRow()
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
                 } footer: {
                     Text("Sizes appear after a scan. Maps tiles and leftover installers start off.")
@@ -94,6 +71,48 @@ struct CategoriesWindow: View {
             }
             .windowList()
         }
+    }
+}
+
+/// Two lines beside the switch: the name, then the size and what the category is.
+struct CategoryRow: View {
+    @ObservedObject var model: CleanerModel
+    let category: CleanCategory
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: category.symbol)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.foreground)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category.title)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                caption
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(category.title, isOn: Binding(
+                get: { category.enabled },
+                set: { model.setEnabled(category.id, $0) }
+            ))
+            .labelsHidden()
+            .disabled(model.isBusy)
+        }
+    }
+
+    /// "2.6 GB · Diagnostic log archive" after a scan, just the description before one.
+    private var caption: Text {
+        let detail = Text(category.detail).foregroundColor(Color.white.opacity(0.55))
+        guard let bytes = model.displayBytes(for: category) else { return detail }
+        return Text(CleanerModel.format(bytes)).foregroundColor(Color.white.opacity(bytes > 0 ? 0.85 : 0.45))
+            + Text(" · ").foregroundColor(Color.white.opacity(0.35))
+            + detail
     }
 }
 

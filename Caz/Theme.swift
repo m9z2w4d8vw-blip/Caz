@@ -6,11 +6,11 @@ import UIKit
 // (DOGlobalAppearance, DOThemeManager, Themes.plist) with a yellow theme taken from Caz's icon.
 
 enum Theme {
-    /// Dopamine tints its panels with a dark tone of the theme colour at partial opacity.
-    /// For Caz's yellow that's a deep amber.
-    static let menu = Color(red: 61 / 255.0, green: 38 / 255.0, blue: 0 / 255.0).opacity(0.55)
-    /// Categories, App Caches, Settings and the log.
-    static let window = Color(red: 38 / 255.0, green: 24 / 255.0, blue: 0 / 255.0).opacity(0.72)
+    /// The menu and the big button. Dopamine's default theme sets actionMenuColor to 723f3f3f, read as
+    /// ARGB: #3F3F3F at 114/255 (44.7%). DOActionMenuView and DOJailbreakButton both use it as is.
+    static let menu = Color(red: 63 / 255.0, green: 63 / 255.0, blue: 63 / 255.0).opacity(114 / 255.0)
+    /// Categories, App Caches, Settings and the log. Dopamine's windowColor 994c4c4c: #4C4C4C at 153/255 (60%).
+    static let window = Color(red: 76 / 255.0, green: 76 / 255.0, blue: 76 / 255.0).opacity(153 / 255.0)
     /// The icon's gold, used for switches.
     static let accent = Color(red: 255 / 255.0, green: 178 / 255.0, blue: 30 / 255.0)
     static let separator = Color(white: 0.6).opacity(0.3)
