@@ -1,3 +1,144 @@
+# Build, check and publish Caz (Caz.tipa / Caz.ipa for TrollStore).
+#
+#   push to any branch         -> build + package + check
+#   push to main               -> ...and publish to the rolling "nightly" pre-release
+#   push of a tag like v1.0.0  -> ...and publish a versioned release
+#   Actions tab > Run workflow -> same as a push to the selected branch
+#
+# No secrets are needed: publishing uses the built-in GITHUB_TOKEN.
+# Why macOS: the iPhoneOS SDK ships inside Xcode, which only exists on the macOS runner image.
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  # Never cancel runs on main or tags (they publish). Do cancel superseded runs on other branches.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # Build the app and its root helper, sign both with their entitlements, package and check them.
+  # ---------------------------------------------------------------------------------------------
+  build:
+    name: Build Caz (.tipa for TrollStore)
+    runs-on: macos-15            # pinned on purpose; macos-latest is moving to macOS 26
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_NO_ENV_HINTS: '1'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode and show the iPhoneOS SDK
+        run: |
+          XCODE=/Applications/Xcode_16.4.app
+          if [ -d "$XCODE" ]; then
+            sudo xcode-select -s "$XCODE/Contents/Developer"
+          else
+            echo "::warning::$XCODE not found, using the image default"
+          fi
+          xcodebuild -version
+          echo "iPhoneOS SDK version: $(xcrun --sdk iphoneos --show-sdk-version)"
+
+      - name: Install build tools (XcodeGen, ldid)
+        run: brew install xcodegen ldid
+
+      - name: Compute the version
+        id: version
+        run: |
+          set -euo pipefail
+          base="$(grep -m1 'MARKETING_VERSION' project.yml | grep -Eo '[0-9]+(\.[0-9]+)*' | head -n1)"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"            # tag v1.2.0 -> 1.2.0
+          else
+            version="${base}.${GITHUB_RUN_NUMBER}"    # 1.0 -> 1.0.57  (always increasing)
+          fi
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::version '$version' is not dotted-numeric (project.yml says '$base', ref is ${GITHUB_REF})"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${version}"
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Build Caz.app
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          xcodebuild -quiet -project Caz.xcodeproj -scheme Caz -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Build the root helper
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcrun --sdk iphoneos clang -arch arm64 -mios-version-min=17.0 -O2 -Wall \
+            -framework CoreFoundation -o build/cazhelper RootHelper/main.c
+
+      - name: Sign and package Caz.tipa and Caz.ipa
+        run: bash scripts/package.sh
+
+      - name: Check the package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tipa=build/Caz.tipa
+          test -s "$tipa" || { echo "::error::$tipa was not built"; exit 1; }
+          cmp "$tipa" build/Caz.ipa || { echo "::error::Caz.ipa is missing or differs from Caz.tipa"; exit 1; }
+          rm -rf tipacheck && mkdir tipacheck && unzip -q "$tipa" -d tipacheck
+          bundle=tipacheck/Payload/Caz.app
+          for f in Caz cazhelper Info.plist Assets.car; do
+            test -s "$bundle/$f" || { echo "::error::$f is missing from Caz.app"; exit 1; }
+          done
+          test -x "$bundle/cazhelper" || { echo "::error::cazhelper is not executable"; exit 1; }
+          echo "Slices: Caz $(lipo -archs "$bundle/Caz"), cazhelper $(lipo -archs "$bundle/cazhelper")"
+          ldid -e "$bundle/Caz" > app-entitlements.plist
+          grep -q 'com.apple.private.persona-mgmt' app-entitlements.plist \
+            || { echo "::error::Caz is not signed with its entitlements"; cat app-entitlements.plist; exit 1; }
+          ldid -e "$bundle/cazhelper" > helper-entitlements.plist
+          grep -q 'com.apple.private.security.no-sandbox' helper-entitlements.plist \
+            || { echo "::error::cazhelper is not signed with its entitlements"; cat helper-entitlements.plist; exit 1; }
+          plutil -p "$bundle/Info.plist" | grep -E 'CFBundleIdentifier|CFBundleShortVersionString|CFBundleVersion'
+          echo "Package OK: $(du -h "$tipa" | cut -f1)"
+          {
+            echo "### Caz ${VERSION}"
+            echo ""
+            echo "- Package: \`Caz.tipa\` ($(du -h "$tipa" | cut -f1)), also published as \`Caz.ipa\`"
+            echo "- Commit: \`${GITHUB_SHA:0:7}\`"
+            echo "- Slices: \`$(lipo -archs "$bundle/Caz")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Caz-app
+          path: |
+            build/Caz.tipa
+            build/Caz.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------------------------
+  # Publish. Only main and v* tags; only if the build job succeeded.
+  # ---------------------------------------------------------------------------------------------
   release:
     name: Publish to GitHub Releases
     needs: build
@@ -29,20 +170,34 @@
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
+          ls -la dist
           short="${GITHUB_SHA:0:7}"
+
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # ---- versioned release: v1.2.0 ----
             tag="${GITHUB_REF_NAME}"
             if gh release view "$tag" >/dev/null 2>&1; then
-              gh release upload "$tag" dist/* --clobber
+              gh release upload "$tag" dist/* --clobber                 # re-run of the same tag
             else
               gh release create "$tag" dist/* --verify-tag --title "Caz ${VERSION}" --generate-notes
             fi
           else
+            # ---- rolling pre-release "nightly": delete and recreate so the tag moves to this commit ----
             tag="nightly"
             gh release delete "$tag" --cleanup-tag --yes >/dev/null 2>&1 || true
             gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${tag}" >/dev/null 2>&1 || true
             sleep 3
+            cat > notes.md <<EOF
+          Automated build of commit ${short} (workflow run #${GITHUB_RUN_NUMBER}).
+
+          - Version: ${VERSION}
+          - Caz.tipa and Caz.ipa: the same file under both names. Open either with TrollStore; sideloading it with AltStore or Sideloadly removes the permissions Caz needs to reach its root helper.
+          - Verify your downloads against SHA256SUMS
+
+          Experimental build; not tested on a device by CI.
+          EOF
             gh release create "$tag" dist/* --target "$GITHUB_SHA" --prerelease \
-              --title "Nightly ${VERSION} (${short})" \
-              --notes "Automated build of ${short}. Caz.tipa and Caz.ipa are the same file; open either with TrollStore."
+              --title "Nightly ${VERSION} (${short})" --notes-file notes.md
           fi
+
+          echo "Published: https://github.com/${GH_REPO}/releases/tag/${tag}" | tee -a "$GITHUB_STEP_SUMMARY"
