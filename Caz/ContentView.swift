@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 enum CazWindow: Equatable {
-    case categories, apps, settings, log, credits, license
+    case categories, apps, settings, log
 }
 
 /// The main screen, laid out like DOMainViewController: a header, the action menu and the big
@@ -116,10 +116,6 @@ struct ContentView: View {
             SettingsWindow(model: model, openLog: { self.window = .log })
         case .log:
             LogWindow(model: model, onBack: { self.window = .settings })
-        case .credits:
-            CreditsWindow(openLicense: { self.window = .license })
-        case .license:
-            LicenseWindow(onBack: { self.window = .credits })
         }
     }
 
@@ -135,8 +131,6 @@ struct ContentView: View {
                      chevron: true) { window = .settings },
             MenuItem(id: "scan", title: "Scan", symbol: "magnifyingglass",
                      enabled: !model.isBusy) { model.scan() },
-            MenuItem(id: "credits", title: "Credits", symbol: "info.circle",
-                     chevron: true) { window = .credits },
         ]
     }
 

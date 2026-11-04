@@ -9,12 +9,15 @@ enum Theme {
     /// Dopamine tints its panels with a dark tone of the theme colour at partial opacity.
     /// For Caz's yellow that's a deep amber.
     static let menu = Color(red: 61 / 255.0, green: 38 / 255.0, blue: 0 / 255.0).opacity(0.55)
-    /// Settings, Credits and the other windows.
+    /// Categories, App Caches, Settings and the log.
     static let window = Color(red: 38 / 255.0, green: 24 / 255.0, blue: 0 / 255.0).opacity(0.72)
     /// The icon's gold, used for switches.
     static let accent = Color(red: 255 / 255.0, green: 178 / 255.0, blue: 30 / 255.0)
     static let separator = Color(white: 0.6).opacity(0.3)
-    /// Dopamine draws button titles and icons in white at 75%.
+    /// Menu and button titles and icons. Dopamine's button configuration only dims white given in an
+    /// RGB colour space, so plain white renders at full strength (measured at 253, 254, 254).
+    static let text = Color.white
+    /// Secondary icons inside windows.
     static let foreground = Color.white.opacity(0.75)
     static let secondary = Color.white.opacity(0.8)
     static let failure = Color(red: 1.0, green: 0.62, blue: 0.56)
@@ -102,7 +105,14 @@ enum WordmarkFont {
     static let bundledName: String? = registerBundledFonts()
 
     private static func registerBundledFonts() -> String? {
-        let urls = ["ttf", "otf"].flatMap { Bundle.main.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
+        // Any .ttf/.otf anywhere in the app bundle, whatever the case of its extension.
+        var urls: [URL] = []
+        if let walker = FileManager.default.enumerator(at: Bundle.main.bundleURL, includingPropertiesForKeys: nil) {
+            for case let url as URL in walker where ["ttf", "otf"].contains(url.pathExtension.lowercased()) {
+                urls.append(url)
+            }
+        }
+        urls.sort { $0.lastPathComponent < $1.lastPathComponent }
         var first: String? = nil
         for url in urls {
             _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)

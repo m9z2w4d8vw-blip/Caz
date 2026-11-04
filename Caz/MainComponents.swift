@@ -88,14 +88,22 @@ struct MenuRow: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             item.action()
         } label: {
+            // DOActionMenuButton: a plain UIButton configuration (12 pt content insets, 10 pt image
+            // padding, 17 pt title, symbols drawn at about 19 pt), with the chevron pinned 10 pt from the
+            // button's trailing edge.
             HStack(spacing: 10) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 19, weight: .medium))
                 Text(item.title)
                     .font(.system(size: 17))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 12)
+            .frame(height: height)
+            .overlay(alignment: .trailing) {
                 if item.chevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .regular))
@@ -103,8 +111,6 @@ struct MenuRow: View {
                         .padding(.trailing, 10)
                 }
             }
-            .foregroundStyle(Theme.foreground)
-            .frame(height: height)
             .contentShape(Rectangle())
         }
         .buttonStyle(MenuButtonStyle())
@@ -127,13 +133,13 @@ struct ActionButton: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 19, weight: .medium))
                 Text(title)
                     .font(.system(size: 17))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            .foregroundStyle(Theme.foreground)
+            .foregroundStyle(Theme.text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }

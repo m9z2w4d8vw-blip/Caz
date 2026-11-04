@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // Windows open in the middle of the screen over the dimmed backdrop, like Dopamine's
-// Settings and Credits (DONavigationController, DOPSListController, DOHeaderCell).
+// Settings window (DONavigationController, DOPSListController, DOHeaderCell).
 
 struct WindowCard<Content: View>: View {
     let title: String
@@ -280,93 +280,6 @@ struct LogWindow: View {
                 }
                 .textSelection(.enabled)
                 .padding(16)
-            }
-        }
-    }
-}
-
-struct CreditsWindow: View {
-    let openLicense: () -> Void
-
-    var body: some View {
-        WindowCard(title: "Caz \(Bundle.main.shortVersion) - Credits") {
-            List {
-                Section {
-                    creditRow("Caz", "A storage cleaner for TrollStore")
-                    Link(destination: URL(string: "https://github.com/m9z2w4d8vw-blip/Caz")!) {
-                        linkRow("Source Code")
-                    }
-                    .windowRow()
-                }
-
-                Section {
-                    creditRow("Dopamine", "Caz's interface is based on Dopamine's, by Lars Fröder (opa334)")
-                    Button(action: openLicense) {
-                        linkRow("Dopamine License (MIT)")
-                    }
-                    .buttonStyle(MenuButtonStyle())
-                    .windowRow()
-                } header: {
-                    Text("Interface")
-                        .foregroundStyle(Color.white.opacity(0.6))
-                }
-
-                Section {
-                    creditRow("TrollStore", "By opa334. Caz starts its root helper the way TrollStore apps do.")
-                } header: {
-                    Text("Thanks")
-                        .foregroundStyle(Color.white.opacity(0.6))
-                }
-            }
-            .windowList()
-        }
-    }
-
-    private func creditRow(_ title: String, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .foregroundStyle(.white)
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(Color.white.opacity(0.6))
-        }
-        .padding(.vertical, 2)
-        .windowRow()
-    }
-
-    private func linkRow(_ title: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.6))
-        }
-        .contentShape(Rectangle())
-    }
-}
-
-struct LicenseWindow: View {
-    let onBack: () -> Void
-
-    private var text: String {
-        guard let url = Bundle.main.url(forResource: "LICENSE-Dopamine", withExtension: "txt"),
-              let contents = try? String(contentsOf: url, encoding: .utf8) else {
-            return "MIT License\n\nCopyright (c) 2023-2024 Lars Fröder (opa334)"
-        }
-        return contents
-    }
-
-    var body: some View {
-        WindowCard(title: "Dopamine License", onBack: onBack) {
-            ScrollView {
-                Text(text)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(18)
-                    .textSelection(.enabled)
             }
         }
     }

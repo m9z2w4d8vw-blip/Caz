@@ -101,8 +101,9 @@ bottom.
 
 - **The lines under the name** show the iOS version and free space, then the author. If something's wrong, such as
   Caz not having root access, the second line says so instead.
-- **The menu** opens Categories, App Caches, Settings and Credits as windows in the middle of the screen. Tap outside
-  a window to close it. **Scan** measures every category; scan again any time to refresh the sizes.
+- **The menu** has the same four-row layout as Dopamine's. Categories, App Caches and Settings open as windows in the
+  middle of the screen; tap outside a window to close it. **Scan** measures every category; scan again any time to
+  refresh the sizes.
 - **The big button** always cleans. It's greyed out until a scan finds something, then reads **Clean 9.8 GB**.
   Tapping it folds the menu away and opens the button into a log: each category appears as a line, gets a
   checkmark when it's done, and the last line shows the total. The button folds back on its own.
@@ -236,11 +237,11 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 │   ├── CleanerModel.swift         state, settings, the log, and the helper protocol
 │   ├── ContentView.swift          the main screen: header, menu, the button and its log
 │   ├── MainComponents.swift       header, menu rows, the button, the lyrics log, spinners
-│   ├── Windows.swift              Categories, App Caches, Settings, Log, Credits
+│   ├── Windows.swift              Categories, App Caches, Settings and the log
 │   ├── Theme.swift                colours, metrics and the backdrop
 │   ├── RootSpawn.h/.m             starts the helper as root
 │   ├── AppIcons.h/.m              looks up app icons for the App Caches list
-│   ├── Resources/                 LICENSE-Dopamine.txt, shown in Credits, and the wordmark font
+│   ├── Resources/                 LICENSE-Dopamine.txt and the wordmark font
 │   └── Assets.xcassets            the app icon and the yellow backdrop
 ├── RootHelper/                cazhelper (C) and its entitlements
 ├── Config/                    Info.plist and the app's entitlements
@@ -253,8 +254,7 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 ## Credits
 
 Caz's interface is based on [Dopamine](https://github.com/opa334/Dopamine)'s, by Lars Fröder (opa334), used under
-the MIT License. The license ships inside the app (**Credits > Dopamine License (MIT)**) and in
-`Caz/Resources/LICENSE-Dopamine.txt`. Caz starts its root helper the way TrollStore apps do.
+the MIT License, which ships inside the app bundle and in `Caz/Resources/LICENSE-Dopamine.txt`. Caz starts its root helper the way TrollStore apps do.
 
 The **Caz** wordmark uses the first `.ttf` or `.otf` file in `Caz/Resources`, sized to Dopamine's proportions.
 Put the Fonarto font file there to match Dopamine's wordmark; without a font file it falls
