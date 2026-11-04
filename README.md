@@ -46,7 +46,7 @@ copy of a real iPhone's file system. The app itself hasn't been verified on a de
 | --- | --- |
 | 🎨 **Dopamine-style interface** | The menu, the button that opens into a live log, and the windows follow Dopamine's design, in Caz's yellow. |
 | 🔍 **Scan first, then choose** | Every category shows its size before anything is deleted. Turn categories, or single apps, off. |
-| 🧹 **One-tap clean** | The button opens into a log that checks off each category as it finishes. |
+| 🧹 **One-tap clean** | **Clean** opens into a log that checks off each category as it finishes. |
 | 🧾 **System logs under control** | Clears the diagnostic log archive without a reboot, and can keep it to a day's worth (Dopamine). |
 | 🛡️ **Careful by design** | A fixed list of paths, no symlinks followed, files in use left alone, SpringBoard and Jetsam reports kept. |
 | 📦 **Leftovers too** | Abandoned downloads, IPAs left in app inboxes, and temp copies that Photos and other apps never deleted. |
@@ -64,8 +64,9 @@ copy of a real iPhone's file system. The app itself hasn't been verified on a de
 1. **Download** `Caz.tipa` from the [**nightly** release](https://github.com/m9z2w4d8vw-blip/Caz/releases). It's
    rebuilt on every push to `main`; `SHA256SUMS` lets you verify the files.
 2. **Install.** Open `Caz.tipa` with TrollStore. `Caz.ipa` is the same file under another name.
-3. **Scan.** Open Caz and tap **Scan**. Nothing is deleted yet; every category shows its size.
-4. **Choose and clean.** Turn off anything you want to keep, then tap **Clean**. The button shows the total.
+3. **Scan.** Open Caz and tap **Scan** in the menu. Nothing is deleted yet; every category gets a size.
+4. **Choose and clean.** Turn off anything you want to keep in **Categories** or **App Caches**, then tap
+   **Clean** at the bottom. It shows the total.
 5. **Optional.** On a Dopamine jailbreak, turn on **Settings > Trim logs automatically**.
 
 > [!NOTE]
@@ -95,17 +96,18 @@ sudo rm /var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist
 
 ### The main screen
 
-The layout follows Dopamine's: the name and two status lines at the top, a menu in the middle, and one big button
-at the bottom.
+The layout follows Dopamine's: the name and two lines at the top, a menu in the middle, and one big button at the
+bottom.
 
-- **The status lines** show the iOS version and free space, then what a scan found or a clean freed.
+- **The lines under the name** show the iOS version and free space, then the author. If something's wrong, such as
+  Caz not having root access, the second line says so instead.
 - **The menu** opens Categories, App Caches, Settings and Credits as windows in the middle of the screen. Tap outside
-  a window to close it. **Restart SpringBoard** fades the screen to black and resprings.
-- **The big button** reads **Scan**, then **Clean 9.8 GB**, then **Scan Again**. Tapping it folds the menu away and
-  opens the button into a log: each category appears as a line, gets a checkmark when it's done, and the last line
-  shows the total. The button folds back on its own.
+  a window to close it. **Scan** measures every category; scan again any time to refresh the sizes.
+- **The big button** always cleans. It's greyed out until a scan finds something, then reads **Clean 9.8 GB**.
+  Tapping it folds the menu away and opens the button into a log: each category appears as a line, gets a
+  checkmark when it's done, and the last line shows the total. The button folds back on its own.
 - **Categories** lists every category with its size and a switch. **App Caches** lists every app's cache after a
-  scan, so you can keep single apps.
+  scan, with each app's icon, so you can tell exactly whose cache you're clearing and keep single apps.
 
 ### What gets cleaned
 
@@ -138,8 +140,8 @@ at the bottom.
 
 | Symptom | Likely cause | What to do |
 | --- | --- | --- |
-| The status line reads *Caz couldn't get root access. Install it with TrollStore.* | Caz wasn't installed with TrollStore, so its helper can't start as root | Install `Caz.tipa` with TrollStore. |
-| The status line reads *The root helper is missing from the app.* | The build didn't include `cazhelper` | Use a release build, or open the run's **Check the package** step. |
+| The line under the name reads *Caz couldn't get root access. Install it with TrollStore.* | Caz wasn't installed with TrollStore, so its helper can't start as root | Install `Caz.tipa` with TrollStore. |
+| The line under the name reads *The root helper is missing from the app.* | The build didn't include `cazhelper` | Use a release build, or open the run's **Check the package** step. |
 | Lines in **View Log** start with `!` | Some files were in use or protected | Close the apps involved and clean again. |
 | *Freed* is less than the scan showed | Files changed or were in use between the scan and the clean | Normal for caches being written to. Scan again to see what's left. |
 | The space comes back within days | Logs and app caches refill as you use the phone | Turn on **Trim logs automatically**. If one app refills fast, the cause is that app. |
@@ -237,7 +239,8 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 │   ├── Windows.swift              Categories, App Caches, Settings, Log, Credits
 │   ├── Theme.swift                colours, metrics and the backdrop
 │   ├── RootSpawn.h/.m             starts the helper as root
-│   ├── Resources/                 LICENSE-Dopamine.txt, shown in Credits
+│   ├── AppIcons.h/.m              looks up app icons for the App Caches list
+│   ├── Resources/                 LICENSE-Dopamine.txt, shown in Credits, and the wordmark font
 │   └── Assets.xcassets            the app icon and the yellow backdrop
 ├── RootHelper/                cazhelper (C) and its entitlements
 ├── Config/                    Info.plist and the app's entitlements
@@ -252,6 +255,10 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 Caz's interface is based on [Dopamine](https://github.com/opa334/Dopamine)'s, by Lars Fröder (opa334), used under
 the MIT License. The license ships inside the app (**Credits > Dopamine License (MIT)**) and in
 `Caz/Resources/LICENSE-Dopamine.txt`. Caz starts its root helper the way TrollStore apps do.
+
+The **Caz** wordmark uses the first `.ttf` or `.otf` file in `Caz/Resources`, sized to Dopamine's proportions.
+Put the Fonarto font file there to match Dopamine's wordmark; without a font file it falls
+back to SF Rounded Bold. Check the font's license before you ship it.
 
 ## Building and testing
 

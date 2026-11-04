@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Windows open in the middle of the screen over the dimmed backdrop, like Dopamine's
 // Settings and Credits (DONavigationController, DOPSListController, DOHeaderCell).
@@ -116,7 +117,8 @@ struct AppsWindow: View {
                                 get: { !model.excluded.contains(app.id) },
                                 set: { model.setExcluded(app.id, !$0) }
                             )) {
-                                HStack {
+                                HStack(spacing: 12) {
+                                    AppIconView(bundleID: app.id)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(app.name)
                                             .foregroundStyle(.white)
@@ -142,6 +144,48 @@ struct AppsWindow: View {
                 .windowList()
             }
         }
+    }
+}
+
+/// The app's real icon, so you can tell exactly whose cache you're clearing.
+struct AppIconView: View {
+    let bundleID: String
+
+    var body: some View {
+        Group {
+            if let image = AppIconCache.icon(for: bundleID) {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                Image(systemName: bundleID == "extensions" ? "puzzlepiece.extension" : "app.dashed")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Theme.foreground)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.white.opacity(0.08))
+            }
+        }
+        .frame(width: 34, height: 34)
+        .clipShape(RoundedRectangle(cornerRadius: 34 * 0.225, style: .continuous))
+        .accessibilityHidden(true)
+    }
+}
+
+/// Icons are looked up once per app and kept for the rest of the session.
+enum AppIconCache {
+    private static var icons: [String: UIImage] = [:]
+    private static var missing: Set<String> = []
+
+    static func icon(for bundleID: String) -> UIImage? {
+        if bundleID == "extensions" || missing.contains(bundleID) { return nil }
+        if let icon = icons[bundleID] { return icon }
+        if let icon = CazAppIcon(bundleID) {
+            icons[bundleID] = icon
+            return icon
+        }
+        missing.insert(bundleID)
+        return nil
     }
 }
 

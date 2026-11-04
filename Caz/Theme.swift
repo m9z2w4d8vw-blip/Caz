@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 import UIKit
 
@@ -92,6 +93,43 @@ extension View {
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 48)
             .tint(Theme.accent)
+    }
+}
+
+/// The wordmark's font. Any .ttf or .otf placed in Caz/Resources is registered at launch and the first
+/// one is used (drop Fonarto there to match Dopamine's wordmark). Without one, SF Rounded Bold is used.
+enum WordmarkFont {
+    static let bundledName: String? = registerBundledFonts()
+
+    private static func registerBundledFonts() -> String? {
+        let urls = ["ttf", "otf"].flatMap { Bundle.main.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
+        var first: String? = nil
+        for url in urls {
+            _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            if first == nil,
+               let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor],
+               let descriptor = descriptors.first,
+               let name = CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute) as? String {
+                first = name
+            }
+        }
+        return first
+    }
+
+    /// The font sized so its capitals are `capHeight` points tall, whatever its proportions.
+    static func font(capHeight: CGFloat) -> UIFont {
+        let probe = base(size: 100)
+        let ratio = probe.capHeight / probe.pointSize
+        return base(size: ratio > 0 ? capHeight / ratio : 44)
+    }
+
+    private static func base(size: CGFloat) -> UIFont {
+        if let name = bundledName, let font = UIFont(name: name, size: size) { return font }
+        let system = UIFont.systemFont(ofSize: size, weight: .bold)
+        if let rounded = system.fontDescriptor.withDesign(.rounded) {
+            return UIFont(descriptor: rounded, size: size)
+        }
+        return system
     }
 }
 

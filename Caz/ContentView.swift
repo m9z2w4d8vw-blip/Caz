@@ -10,7 +10,6 @@ enum CazWindow: Equatable {
 struct ContentView: View {
     @StateObject private var model = CleanerModel()
     @State private var window: CazWindow? = nil
-    @State private var blackout = false
     @Namespace private var actionSpace
 
     var body: some View {
@@ -23,11 +22,6 @@ struct ContentView: View {
                 }
                 if let window {
                     windowLayer(window, size: geo.size)
-                }
-                if blackout {
-                    Color.black
-                        .transition(.opacity)
-                        .zIndex(3)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -66,10 +60,10 @@ struct ContentView: View {
             Spacer(minLength: 12)
             ZStack {
                 if !expanded {
-                    ActionButton(title: model.buttonTitle,
-                                 symbol: model.buttonSymbol,
-                                 enabled: !model.isBusy) {
-                        primaryAction()
+                    ActionButton(title: model.cleanTitle,
+                                 symbol: "trash",
+                                 enabled: model.canClean) {
+                        model.clean()
                     }
                     .matchedGeometryEffect(id: "action", in: actionSpace)
                 }
@@ -139,29 +133,11 @@ struct ContentView: View {
                      chevron: true, enabled: !model.isBusy) { window = .apps },
             MenuItem(id: "settings", title: "Settings", symbol: "gearshape",
                      chevron: true) { window = .settings },
-            MenuItem(id: "respring", title: "Restart SpringBoard", symbol: "arrow.clockwise",
-                     enabled: !model.isBusy) { respring() },
+            MenuItem(id: "scan", title: "Scan", symbol: "magnifyingglass",
+                     enabled: !model.isBusy) { model.scan() },
             MenuItem(id: "credits", title: "Credits", symbol: "info.circle",
                      chevron: true) { window = .credits },
         ]
     }
 
-    private func primaryAction() {
-        switch model.phase {
-        case .idle, .done:
-            model.scan()
-        case .scanned:
-            if model.selectedBytes > 0 { model.clean() } else { model.scan() }
-        case .scanning, .cleaning:
-            break
-        }
-    }
-
-    /// Fade to black, then restart SpringBoard (DOMainViewController's fadeToBlack).
-    private func respring() {
-        withAnimation(.easeIn(duration: 0.3)) { blackout = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            model.respring()
-        }
-    }
 }

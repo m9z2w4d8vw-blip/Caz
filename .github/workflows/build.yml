@@ -106,7 +106,7 @@ jobs:
           cmp "$tipa" build/Caz.ipa || { echo "::error::Caz.ipa is missing or differs from Caz.tipa"; exit 1; }
           rm -rf tipacheck && mkdir tipacheck && unzip -q "$tipa" -d tipacheck
           bundle=tipacheck/Payload/Caz.app
-          for f in Caz cazhelper Info.plist Assets.car; do
+          for f in Caz cazhelper Info.plist Assets.car LICENSE-Dopamine.txt; do
             test -s "$bundle/$f" || { echo "::error::$f is missing from Caz.app"; exit 1; }
           done
           test -x "$bundle/cazhelper" || { echo "::error::cazhelper is not executable"; exit 1; }

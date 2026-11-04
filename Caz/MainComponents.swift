@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 import UIKit
 
@@ -12,10 +13,7 @@ struct HeaderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Caz")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(height: 46, alignment: .bottom)
+            Wordmark()
             Text(subtitle)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.white)
@@ -28,6 +26,22 @@ struct HeaderView: View {
         .padding(.leading, 5)
         .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
         .shadow(color: .black.opacity(0.3), radius: 30)
+    }
+}
+
+/// "Caz" placed like Dopamine's logo: a 40 pt slot at the top of the header, drawn 7 pt higher
+/// (DOHeaderView's alignment inset), with capitals 32 pt tall like the Dopamine wordmark.
+struct Wordmark: View {
+    var body: some View {
+        let font = WordmarkFont.font(capHeight: 32)
+        Text("Caz")
+            .font(Font(font as CTFont))
+            .foregroundStyle(.white)
+            .fixedSize()
+            .alignmentGuide(.top) { d in d[.firstTextBaseline] - font.capHeight }
+            .frame(height: 40, alignment: .topLeading)
+            .offset(y: -7)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

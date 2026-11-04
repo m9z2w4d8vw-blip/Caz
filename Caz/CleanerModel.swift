@@ -134,39 +134,14 @@ final class CleanerModel: ObservableObject {
         "iOS \(UIDevice.current.systemVersion) | \(Self.format(freeBytes)) free"
     }
 
-    /// Second line under the name, like Dopamine's credits line.
-    var headerDetail: String {
-        if let problem { return problem }
-        switch phase {
-        case .idle, .scanning:
-            return "Storage cleaner for TrollStore"
-        case .scanned:
-            return selectedBytes > 0 ? "\(Self.format(selectedBytes)) can be cleaned" : "Nothing to clean right now"
-        case .cleaning:
-            return "Cleaning…"
-        case .done(let freed):
-            return "Freed \(Self.format(freed))"
-        }
-    }
+    /// Second line under the name, like Dopamine's credits line. Problems replace it.
+    var headerDetail: String { problem ?? "by Parv" }
 
-    var buttonTitle: String {
-        switch phase {
-        case .idle: return "Scan"
-        case .scanning: return "Scanning"
-        case .scanned: return selectedBytes > 0 ? "Clean \(Self.format(selectedBytes))" : "Scan Again"
-        case .cleaning: return "Cleaning"
-        case .done: return "Scan Again"
-        }
-    }
+    /// The big button only cleans. It's greyed out until a scan finds something, like Dopamine's
+    /// button once a phone is jailbroken.
+    var canClean: Bool { phase == .scanned && selectedBytes > 0 }
 
-    var buttonSymbol: String {
-        switch phase {
-        case .idle: return "magnifyingglass"
-        case .scanned: return selectedBytes > 0 ? "trash" : "arrow.clockwise"
-        case .done: return "arrow.clockwise"
-        case .scanning, .cleaning: return "hourglass"
-        }
-    }
+    var cleanTitle: String { canClean ? "Clean \(Self.format(selectedBytes))" : "Clean" }
 
     // MARK: - Actions
 
@@ -221,7 +196,7 @@ final class CleanerModel: ObservableObject {
     }
 
     func clean() {
-        guard phase == .scanned else { return }
+        guard canClean else { return }
         let ids = categories.filter { $0.enabled && (displayBytes(for: $0) ?? 0) > 0 }.map(\.id)
         guard !ids.isEmpty else {
             append("Turn on at least one category that has something to clean.")
@@ -250,10 +225,6 @@ final class CleanerModel: ObservableObject {
             }
             self.collapseSoon()
         }
-    }
-
-    func respring() {
-        runHelper(["respring"]) { _ in }
     }
 
     func refreshAutoTrim() {
