@@ -7,7 +7,8 @@
 //   LOG   <text>
 //   ERR   <text>
 //   CAT   <category> <bytes> <files>              (scan result)
-//   APP   <bundle id> <bytes> <name>              (per-app cache size, during scan)
+//   APP   <bundle id> <bytes> <name> <note>       (per-app cache size, during scan)
+//   SKIP  <bundle id> <bytes> <name> <reason>     (an app whose cache is never touched)
 //   FREED <category> <bytes> <files> <errors>     (clean result)
 //   AUTOTRIM on|off|unavailable
 //
@@ -15,6 +16,7 @@
 //   cazhelper scan  [--keep-sb]
 //   cazhelper clean <cat,cat,...> [--keep-sb] [--close-apps] [--exclude id,id,...]
 //   cazhelper autotrim status|enable|disable
+//   cazhelper install-update <path to .tipa>
 //   cazhelper version
 //
 // Safety rules: never follows symlinks, never crosses into another volume, only touches
@@ -290,8 +292,36 @@ static const Box *box_by_id(const Boxes *bx, const char *id) {
     return NULL;
 }
 
-// Spotify keeps offline music in its cache folder; Caz never touches its own data.
-static int never_touch(const char *id) { return starts_with(id, "com.spotify.client") || strcmp(id, "com.parv.caz") == 0; }
+// Apps whose cache folder holds things you chose to download. Only apps actually installed are
+// reported (as SKIP lines), and their caches are never touched.
+typedef struct { const char *prefix; const char *reason; } Skip;
+static const Skip k_skip[] = {
+    { "com.spotify.client", "Keeps downloaded songs in its cache" },
+    { NULL, NULL }
+};
+
+// Apps that keep a few things worth keeping inside an otherwise disposable cache. Those folders
+// stay; everything else in the cache is cleaned. Found by looking inside real app caches.
+typedef struct { const char *id; const char *folders[4]; const char *note; } Keep;
+static const Keep k_keep[] = {
+    { "com.zhiliaoapp.musically", { "offline-mode", "com.studio.album.importToEdit", NULL }, "Offline videos and draft media are kept" },
+    { "com.strava.stravaride",    { "offline", "mapdownloads", NULL },                    "Offline maps are kept" },
+    { "com.google.Maps",          { "OfflineData", NULL },                                 "Offline maps are kept" },
+    { NULL, { NULL }, NULL }
+};
+
+static const Skip *skip_for(const char *id) {
+    for (const Skip *k = k_skip; k->prefix; k++) if (starts_with(id, k->prefix)) return k;
+    return NULL;
+}
+
+static const Keep *keep_for(const char *id) {
+    for (const Keep *k = k_keep; k->id; k++) if (strcmp(id, k->id) == 0) return k;
+    return NULL;
+}
+
+// Caz never touches its own data or a skipped app's cache.
+static int never_touch(const char *id) { return skip_for(id) != NULL || strcmp(id, "com.parv.caz") == 0; }
 
 static int is_excluded(const char *id) {
     for (int i = 0; i < opt_excl_n; i++) if (strcmp(opt_excl[i], id) == 0) return 1;
@@ -472,9 +502,40 @@ static void cat_maps(int clean, Totals *t) {
     if (clean) kill_procs(m_basename, "geod");
 }
 
+// Like contents_at, but top-level entries named in `keep` are left as they are.
+static void contents_except(const char *dir, const char *const *keep, int clean, Totals *t) {
+    if (!is_dir(dir)) return;
+    DIR *d = opendir(dir);
+    if (!d) { if (clean) t->errors++; return; }
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        int kept = 0;
+        for (int i = 0; keep[i]; i++) if (strcmp(de->d_name, keep[i]) == 0) kept = 1;
+        if (kept) continue;
+        char p[PATH_MAX];
+        if (!pathf(p, "%s/%s", dir, de->d_name)) continue;
+        struct stat st;
+        if (lstat(p, &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            contents_at(p, clean, t);
+            if (clean) rmdir(p);
+        } else {
+            uint64_t b = (uint64_t)st.st_blocks * 512u;
+            if (!clean) { t->bytes += b; t->files++; }
+            else if (unlink(p) == 0) { t->bytes += b; t->files++; }
+            else t->errors++;
+        }
+    }
+    closedir(d);
+}
+
 static void app_cache_targets(const char *cpath, const char *id, int clean, Totals *t) {
     char p[PATH_MAX];
-    pathf(p, "%s/Library/Caches", cpath); contents_at(p, clean, t);
+    const Keep *keep = keep_for(id);
+    pathf(p, "%s/Library/Caches", cpath);
+    if (keep) contents_except(p, keep->folders, clean, t);
+    else contents_at(p, clean, t);
     pathf(p, "%s/tmp", cpath);            contents_at(p, clean, t);
     pathf(p, "%s/SystemData/com.apple.SafariViewService/Library/WebKit/WebsiteData/NetworkCache", cpath);
     contents_at(p, clean, t);
@@ -520,14 +581,24 @@ static void cat_appcache(int clean, Totals *t) {
 
     for (int i = 0; i < data.n; i++) {
         const Box *b = &data.v[i];
+        const Box *bb = box_by_id(&bundles, b->id);
+        const char *name = (bb && bb->name[0]) ? bb->name : b->id;
+        const Skip *skip = skip_for(b->id);
+        if (skip) {
+            if (!clean) {               // measured only, so the list can show what's being left alone
+                Totals st = {0, 0, 0};
+                app_cache_targets(b->path, b->id, 0, &st);
+                emit("SKIP\t%s\t%llu\t%s\t%s", b->id, (unsigned long long)st.bytes, name, skip->reason);
+            }
+            continue;
+        }
         if (never_touch(b->id) || is_excluded(b->id)) continue;
         Totals at = {0, 0, 0};
         app_cache_targets(b->path, b->id, clean, &at);
         add(t, &at);
         if (!clean && at.bytes > 0) {
-            const Box *bb = box_by_id(&bundles, b->id);
-            const char *name = (bb && bb->name[0]) ? bb->name : b->id;
-            emit("APP\t%s\t%llu\t%s", b->id, (unsigned long long)at.bytes, name);
+            const Keep *keep = keep_for(b->id);
+            emit("APP\t%s\t%llu\t%s\t%s", b->id, (unsigned long long)at.bytes, name, keep ? keep->note : "");
         }
     }
 
@@ -536,7 +607,7 @@ static void cat_appcache(int clean, Totals *t) {
         each_container("/private/var/mobile/Containers/Data/PluginKitPlugin", extension_caches, clean, &et);
         add(t, &et);
         if (!clean && et.bytes > 0)
-            emit("APP\textensions\t%llu\tExtensions and in-app browsers", (unsigned long long)et.bytes);
+            emit("APP\textensions\t%llu\tExtensions and in-app browsers\t", (unsigned long long)et.bytes);
     }
     free(data.v);
     free(bundles.v);
@@ -698,6 +769,60 @@ static int do_autotrim(const char *verb) {
     return 2;
 }
 
+// ---------------------------------------------------------------- updates
+
+// Installs a downloaded Caz.tipa with TrollStore's installer (trollstorehelper, inside TrollStore.app),
+// in its own session so it finishes even when installing closes Caz.
+static int do_install_update(const char *path) {
+    char mobile[PATH_MAX], mobile2[PATH_MAX];
+    rp(mobile, "/private/var/mobile/"); rp(mobile2, "/var/mobile/");
+    struct stat st;
+    if (!(starts_with(path, mobile) || starts_with(path, mobile2)) || lstat(path, &st) != 0 || !S_ISREG(st.st_mode)
+        || !(ends_with_ci(path, ".tipa") || ends_with_ci(path, ".ipa"))) {
+        emit("ERR\tThe downloaded update wasn't found");
+        return 4;
+    }
+    Boxes bundles;
+    boxes_load("/private/var/containers/Bundle/Application", &bundles, 0);
+    const Box *ts = box_by_id(&bundles, "com.opa334.TrollStore");
+    char helper[PATH_MAX] = "";
+    if (ts) pathf(helper, "%s/TrollStore.app/trollstorehelper", ts->path);
+    free(bundles.v);
+    if (!helper[0] || access(helper, F_OK) != 0) {
+        emit("ERR\tTrollStore's installer wasn't found");
+        return 5;
+    }
+    emit("LOG\tInstalling with TrollStore");
+#ifdef CAZ_TEST
+    emit("LOG\t(test) would run %s install %s", helper, path);
+    return 0;
+#else
+    posix_spawnattr_t attr;
+    posix_spawnattr_init(&attr);
+#ifdef POSIX_SPAWN_SETSID
+    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID);
+#endif
+    char *argv[] = { "trollstorehelper", "install", (char *)path, NULL };
+    pid_t pid;
+    int rc = posix_spawn(&pid, helper, NULL, &attr, argv, environ);
+    posix_spawnattr_destroy(&attr);
+    if (rc != 0) {
+        emit("ERR\tCouldn't start TrollStore's installer: %s", strerror(rc));
+        return 6;
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+    unlink(path);
+    int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (code != 0) {
+        emit("ERR\tTrollStore's installer returned %d", code);
+        return 7;
+    }
+    emit("LOG\tInstalled");
+    return 0;
+#endif
+}
+
 // ---------------------------------------------------------------- main
 
 static void parse_options(int argc, char **argv, int first) {
@@ -731,13 +856,14 @@ int main(int argc, char **argv) {
     }
 #endif
     if (argc < 2) {
-        emit("ERR\tusage: cazhelper scan | clean <categories> | autotrim status|enable|disable | version");
+        emit("ERR\tusage: cazhelper scan | clean <categories> | autotrim status|enable|disable | install-update <tipa> | version");
         return 2;
     }
     if (strcmp(argv[1], "version") == 0) { emit("LOG\tcazhelper %s", CAZ_VERSION); return 0; }
     if (strcmp(argv[1], "scan") == 0) { parse_options(argc, argv, 2); do_scan(); return 0; }
     if (strcmp(argv[1], "clean") == 0 && argc >= 3) { parse_options(argc, argv, 3); do_clean(argv[2]); return 0; }
     if (strcmp(argv[1], "autotrim") == 0 && argc >= 3) return do_autotrim(argv[2]);
+    if (strcmp(argv[1], "install-update") == 0 && argc >= 3) return do_install_update(argv[2]);
     emit("ERR\tUnknown command: %s", argv[1]);
     return 2;
 }

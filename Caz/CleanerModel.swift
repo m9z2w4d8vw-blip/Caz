@@ -16,6 +16,15 @@ struct AppCache: Identifiable, Equatable {
     let id: String
     let name: String
     let bytes: Int64
+    var note: String = ""
+}
+
+/// An installed app whose cache Caz never touches, because it keeps downloads there.
+struct SkippedApp: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let bytes: Int64
+    let reason: String
 }
 
 /// One line of the lyrics-style log, like DOLyricsLogItemView.
@@ -69,6 +78,7 @@ final class CleanerModel: ObservableObject {
 
     @Published var categories: [CleanCategory] = []
     @Published var apps: [AppCache] = []
+    @Published var skippedApps: [SkippedApp] = []
     @Published var excluded: Set<String> = []
     @Published var log: [String] = []
     @Published var lyrics: [LyricLine] = []
@@ -95,13 +105,25 @@ final class CleanerModel: ObservableObject {
         static let closeApps = "closeApps"
         static let excluded = "excludedApps"
         static let disabled = "disabledCategories"
+        static let defaultExclusionsApplied = "defaultExclusionsApplied.v1"
     }
+
+    /// Apps that start switched off in App Caches because they may keep downloads in their cache.
+    /// You can still switch them on.
+    static let defaultExcluded: [String: String] = [
+        "com.google.ios.youtube": "Off by default: it may keep downloaded videos here",
+    ]
 
     init() {
         let defaults = UserDefaults.standard
         keepSpringBoard = defaults.object(forKey: Keys.keepSpringBoard) as? Bool ?? true
         closeApps = defaults.object(forKey: Keys.closeApps) as? Bool ?? true
         excluded = Set(defaults.stringArray(forKey: Keys.excluded) ?? [])
+        if !defaults.bool(forKey: Keys.defaultExclusionsApplied) {
+            excluded.formUnion(Self.defaultExcluded.keys)
+            defaults.set(Array(excluded), forKey: Keys.excluded)
+            defaults.set(true, forKey: Keys.defaultExclusionsApplied)
+        }
         let disabled = Set(defaults.stringArray(forKey: Keys.disabled) ?? ["maps", "installers"])
         categories = Self.catalog.map { item in
             var category = item
@@ -129,10 +151,8 @@ final class CleanerModel: ObservableObject {
         categories.filter(\.enabled).reduce(Int64(0)) { $0 + (displayBytes(for: $1) ?? 0) }
     }
 
-    /// First line under the name, like Dopamine's version and device line.
-    var headerSubtitle: String {
-        "iOS \(UIDevice.current.systemVersion) | \(Self.format(freeBytes)) free"
-    }
+    /// First line under the name, like Dopamine's version line.
+    var headerSubtitle: String { "iOS \(UIDevice.current.systemVersion)" }
 
     /// Second line under the name, like Dopamine's credits line. Problems replace it.
     var headerDetail: String { problem ?? "by Parv" }
@@ -170,6 +190,7 @@ final class CleanerModel: ObservableObject {
         log.removeAll()
         lyrics.removeAll()
         apps.removeAll()
+        skippedApps.removeAll()
         for index in categories.indices {
             categories[index].bytes = nil
             categories[index].files = 0
@@ -225,6 +246,12 @@ final class CleanerModel: ObservableObject {
             }
             self.collapseSoon()
         }
+    }
+
+    /// Hands a downloaded update to TrollStore's installer through the root helper.
+    func installUpdate(_ file: URL, completion: @escaping (Bool) -> Void) {
+        append("Installing \(file.lastPathComponent) with TrollStore")
+        runHelper(["install-update", file.path]) { status in completion(status == 0) }
     }
 
     func refreshAutoTrim() {
@@ -335,7 +362,11 @@ final class CleanerModel: ObservableObject {
             }
             finishLyric("\(title(for: fields[1])): \(Self.format(bytes))")
         case "APP" where fields.count >= 4:
-            apps.append(AppCache(id: fields[1], name: fields[3], bytes: Int64(fields[2]) ?? 0))
+            let note = fields.count >= 5 ? fields[4] : ""
+            apps.append(AppCache(id: fields[1], name: fields[3], bytes: Int64(fields[2]) ?? 0,
+                                 note: note.isEmpty ? (Self.defaultExcluded[fields[1]] ?? "") : note))
+        case "SKIP" where fields.count >= 5:
+            skippedApps.append(SkippedApp(id: fields[1], name: fields[3], bytes: Int64(fields[2]) ?? 0, reason: fields[4]))
         case "FREED" where fields.count >= 3:
             let bytes = Int64(fields[2]) ?? 0
             freedTotal += bytes

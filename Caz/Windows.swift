@@ -102,7 +102,7 @@ struct AppsWindow: View {
 
     var body: some View {
         WindowCard(title: "App Caches") {
-            if model.apps.isEmpty {
+            if model.apps.isEmpty && model.skippedApps.isEmpty {
                 Text(model.phase == .idle ? "Scan first to see each app's cache." : "No app caches to clean.")
                     .font(.system(size: 15))
                     .foregroundStyle(Color.white.opacity(0.6))
@@ -127,6 +127,11 @@ struct AppsWindow: View {
                                             .font(.caption2)
                                             .foregroundStyle(Color.white.opacity(0.5))
                                             .lineLimit(1)
+                                        if !app.note.isEmpty {
+                                            Text(app.note)
+                                                .font(.caption2)
+                                                .foregroundStyle(Theme.accent.opacity(0.9))
+                                        }
                                     }
                                     Spacer(minLength: 6)
                                     Text(CleanerModel.format(app.bytes))
@@ -137,8 +142,37 @@ struct AppsWindow: View {
                             .windowRow()
                         }
                     } footer: {
-                        Text("Turn off apps whose caches you want to keep. Spotify is always skipped because it stores downloaded music there.")
+                        Text("Turn off apps whose caches you want to keep.")
                             .foregroundStyle(Color.white.opacity(0.5))
+                    }
+
+                    if !model.skippedApps.isEmpty {
+                        Section {
+                            ForEach(model.skippedApps) { app in
+                                HStack(spacing: 12) {
+                                    AppIconView(bundleID: app.id)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(app.name)
+                                            .foregroundStyle(.white)
+                                            .lineLimit(1)
+                                        Text(app.reason)
+                                            .font(.caption2)
+                                            .foregroundStyle(Color.white.opacity(0.5))
+                                    }
+                                    Spacer(minLength: 6)
+                                    Text(CleanerModel.format(app.bytes))
+                                        .font(.footnote.monospacedDigit())
+                                        .foregroundStyle(Color.white.opacity(0.5))
+                                }
+                                .windowRow()
+                            }
+                        } header: {
+                            Text("Skipped")
+                                .foregroundStyle(Color.white.opacity(0.6))
+                        } footer: {
+                            Text("These apps keep downloads in their cache, so Caz never touches them.")
+                                .foregroundStyle(Color.white.opacity(0.5))
+                        }
                     }
                 }
                 .windowList()

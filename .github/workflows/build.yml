@@ -1,8 +1,8 @@
 # Build, check and publish Caz (Caz.tipa / Caz.ipa for TrollStore).
 #
 #   push to any branch         -> build + package + check
-#   push to main               -> ...and publish to the rolling "nightly" pre-release
-#   push of a tag like v1.0.0  -> ...and publish a versioned release
+#   push to main               -> ...and publish release v<version> (its notes are the commit messages)
+#   push of a tag like v1.2.0  -> ...and publish that tag as a release
 #   Actions tab > Run workflow -> same as a push to the selected branch
 #
 # No secrets are needed: publishing uses the built-in GITHUB_TOKEN.
@@ -168,36 +168,35 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.build.outputs.version }}
+          COMMITS_JSON: ${{ toJSON(github.event.commits) }}
         run: |
           set -euo pipefail
           ls -la dist
           short="${GITHUB_SHA:0:7}"
 
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            # ---- versioned release: v1.2.0 ----
+            # ---- a tag you pushed yourself, like v1.2.0 ----
             tag="${GITHUB_REF_NAME}"
             if gh release view "$tag" >/dev/null 2>&1; then
               gh release upload "$tag" dist/* --clobber                 # re-run of the same tag
             else
-              gh release create "$tag" dist/* --verify-tag --title "Caz ${VERSION}" --generate-notes
+              gh release create "$tag" dist/* --verify-tag --title "${VERSION}" --generate-notes --latest
             fi
           else
-            # ---- rolling pre-release "nightly": delete and recreate so the tag moves to this commit ----
-            tag="nightly"
-            gh release delete "$tag" --cleanup-tag --yes >/dev/null 2>&1 || true
-            gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${tag}" >/dev/null 2>&1 || true
-            sleep 3
-            cat > notes.md <<EOF
-          Automated build of commit ${short} (workflow run #${GITHUB_RUN_NUMBER}).
-
-          - Version: ${VERSION}
-          - Caz.tipa and Caz.ipa: the same file under both names. Open either with TrollStore; sideloading it with AltStore or Sideloadly removes the permissions Caz needs to reach its root helper.
-          - Verify your downloads against SHA256SUMS
-
-          Experimental build; not tested on a device by CI.
-          EOF
-            gh release create "$tag" dist/* --target "$GITHUB_SHA" --prerelease \
-              --title "Nightly ${VERSION} (${short})" --notes-file notes.md
+            # ---- every push to main: a full release named after its version, like Dopamine's ----
+            # Caz's in-app updater reads these (it skips pre-releases, as Dopamine's does), so the
+            # notes are the commit messages of this push: they become the in-app changelog.
+            tag="v${VERSION}"
+            gh release delete nightly --cleanup-tag --yes >/dev/null 2>&1 || true   # retire the old rolling build
+            notes="$(jq -r '.[]? | "- " + (.message | split("\n")[0])' <<< "${COMMITS_JSON:-null}" || true)"
+            [ -n "$notes" ] || notes="- Build of commit ${short}"
+            printf '%s\n' "$notes" > notes.md
+            cat notes.md
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release upload "$tag" dist/* --clobber
+            else
+              gh release create "$tag" dist/* --target "$GITHUB_SHA" --title "${VERSION}" --notes-file notes.md --latest
+            fi
           fi
 
           echo "Published: https://github.com/${GH_REPO}/releases/tag/${tag}" | tee -a "$GITHUB_STEP_SUMMARY"

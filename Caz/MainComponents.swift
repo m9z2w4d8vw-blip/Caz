@@ -33,8 +33,22 @@ struct HeaderView: View {
 /// (DOHeaderView's alignment inset), with capitals 32 pt tall like the Dopamine wordmark.
 struct Wordmark: View {
     var body: some View {
+        if let image = UIImage(named: "Wordmark") {
+            // Dopamine draws its title from an image (Dopamine.imageset): 40 pt tall, 7 pt high.
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 40, alignment: .leading)
+                .offset(y: -7)
+                .accessibilityLabel("Caz")
+        } else {
+            text
+        }
+    }
+
+    private var text: some View {
         let font = WordmarkFont.font(capHeight: 32)
-        Text("Caz")
+        return Text("Caz")
             .font(Font(font as CTFont))
             .foregroundStyle(.white)
             .fixedSize()

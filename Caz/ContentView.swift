@@ -2,13 +2,14 @@ import SwiftUI
 import UIKit
 
 enum CazWindow: Equatable {
-    case categories, apps, settings, log
+    case categories, apps, settings, log, update
 }
 
 /// The main screen, laid out like DOMainViewController: a header, the action menu and the big
 /// button in one vertical stack, 73% of the screen tall with 30 pt margins.
 struct ContentView: View {
     @StateObject private var model = CleanerModel()
+    @StateObject private var updater = UpdateModel()
     @State private var window: CazWindow? = nil
     @Namespace private var actionSpace
 
@@ -31,7 +32,11 @@ struct ContentView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.9), value: window)
         .sensoryFeedback(.impact(weight: .light), trigger: model.completedSteps)
         .sensoryFeedback(.success, trigger: model.successCount)
-        .onAppear { model.onAppear() }
+        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: updater.isAvailable)
+        .onAppear {
+            model.onAppear()
+            updater.check()
+        }
     }
 
     // MARK: - Main stack
@@ -69,6 +74,20 @@ struct ContentView: View {
                 }
             }
             .frame(height: 60)
+            .overlay(alignment: .top) {
+                // Dopamine's update button: 30 pt tall, 20 pt above the big button (10 on home-button
+                // phones), sliding up 25 pt as it fades in, and hidden while the big button is open.
+                if updater.isAvailable {
+                    UpdateLinkButton(title: "Update Available", symbol: "arrow.down.circle") {
+                        window = .update
+                    }
+                    .frame(height: 30)
+                    .offset(y: -(30 + (Metrics.isHomeButtonDevice ? 10 : 20)))
+                    .opacity(expanded ? 0 : 1)
+                    .allowsHitTesting(!expanded)
+                    .transition(.offset(y: 25).combined(with: .opacity))
+                }
+            }
         }
         .frame(width: stackWidth, height: stackHeight)
         .position(x: size.width / 2, y: size.height / 2 + statusOffset)
@@ -96,8 +115,12 @@ struct ContentView: View {
         return ZStack {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture { self.window = nil }
-            windowView(window)
+                .onTapGesture {
+                    if window == .update && updater.isBusy { return }   // can't back out mid-update
+                    self.window = nil
+                    updater.resetIfIdle()
+                }
+            windowView(window, size: size)
                 .frame(width: min(size.width - Metrics.modalPadding * 2, Metrics.iPadMaxWidth),
                        height: size.height * (small ? 0.8 : 0.7))
                 .transition(.scale(scale: 0.7).combined(with: .opacity))
@@ -106,8 +129,12 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func windowView(_ window: CazWindow) -> some View {
+    private func windowView(_ window: CazWindow, size: CGSize) -> some View {
         switch window {
+        case .update:
+            UpdateFlowView(updater: updater, screenWidth: size.width) { file, done in
+                model.installUpdate(file, completion: done)
+            }
         case .categories:
             CategoriesWindow(model: model)
         case .apps:
@@ -123,14 +150,14 @@ struct ContentView: View {
 
     private var menuItems: [MenuItem] {
         [
-            MenuItem(id: "categories", title: "Categories", symbol: "checklist",
-                     chevron: true, enabled: !model.isBusy) { window = .categories },
-            MenuItem(id: "apps", title: "App Caches", symbol: "square.stack.3d.up",
-                     chevron: true, enabled: !model.isBusy) { window = .apps },
             MenuItem(id: "settings", title: "Settings", symbol: "gearshape",
                      chevron: true) { window = .settings },
             MenuItem(id: "scan", title: "Scan", symbol: "magnifyingglass",
                      enabled: !model.isBusy) { model.scan() },
+            MenuItem(id: "apps", title: "App Caches", symbol: "square.stack.3d.up",
+                     chevron: true, enabled: !model.isBusy) { window = .apps },
+            MenuItem(id: "categories", title: "Categories", symbol: "checklist",
+                     chevron: true, enabled: !model.isBusy) { window = .categories },
         ]
     }
 
