@@ -14,8 +14,9 @@ ldid -SRootHelper/entitlements.plist "$APP/cazhelper"
 ldid -SConfig/Caz.entitlements "$APP/Caz"
 chmod 755 "$APP/Caz" "$APP/cazhelper"
 
-rm -rf build/Payload build/Caz.tipa
+rm -rf build/Payload build/Caz.tipa build/Caz.ipa
 mkdir -p build/Payload
 cp -R "$APP" build/Payload/
 (cd build && zip -qry Caz.tipa Payload)
-echo "Built build/Caz.tipa ($(du -h build/Caz.tipa | cut -f1))"
+cp build/Caz.tipa build/Caz.ipa          # same file; some tools only open .ipa
+echo "Built build/Caz.tipa and build/Caz.ipa ($(du -h build/Caz.tipa | cut -f1))"

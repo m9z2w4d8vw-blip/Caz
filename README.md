@@ -1,55 +1,283 @@
-# Caz
+<p align="center">
+  <img src="docs/images/caz-icon.png" width="128" alt="Caz icon">
+</p>
 
-A storage cleaner for iPhones with TrollStore (iOS 17.0 and later builds). Caz measures and
-clears the junk iOS doesn't clean up on its own, with a live log of everything it does.
+<h1 align="center">Caz</h1>
 
-| Category | What it clears |
-|---|---|
-| System logs | The diagnostic log archive in `/var/db/diagnostics` (refills over a few days) |
-| Abandoned downloads | `CFNetworkDownload_*.tmp` files nobody has touched for an hour |
-| Crash reports | Crash, hang and analytics reports (optionally keeps SpringBoard and Jetsam ones) |
-| System caches | Symbol, Memoji and QuickLook caches, Photos' temporary export copies, sideload staging |
-| App caches | Every app's `Library/Caches` and `tmp`, plus in-app browser caches (pick apps in the list) |
-| Messages previews | Attachment thumbnails (the attachments themselves are untouched) |
-| Maps tiles | The Maps tile cache (off by default; leave off if you use offline maps) |
-| Leftover installers | `.ipa`, `.tipa` and `.deb` files left in app inboxes (off by default) |
+<p align="center">
+  <b>Find and clear the storage iOS never cleans up.</b><br>
+  System logs, abandoned downloads, app caches and leftover installers, measured first and removed in one tap.
+</p>
 
-Caz never touches photos, messages, music, app documents (other than installers in an inbox),
-Spotify's cache (it holds downloaded music) or anything outside the paths in `RootHelper/main.c`.
+<p align="center">
+  <a href="https://github.com/m9z2w4d8vw-blip/Caz/actions/workflows/build.yml"><img src="https://github.com/m9z2w4d8vw-blip/Caz/actions/workflows/build.yml/badge.svg" alt="build"></a>
+  <a href="https://github.com/m9z2w4d8vw-blip/Caz/releases"><img src="https://img.shields.io/badge/download-nightly-FFB21E?logo=github" alt="download nightly"></a>
+  <img src="https://img.shields.io/badge/iOS-17.0-1B1446?logo=apple&logoColor=white" alt="iOS 17.0">
+  <img src="https://img.shields.io/badge/app-TrollStore-FFB21E" alt="TrollStore app">
+  <img src="https://img.shields.io/badge/auto--trim-Dopamine%20rootless-5B2BB5" alt="Dopamine rootless for auto-trim">
+</p>
 
-**Trim logs automatically** (Settings) needs a Dopamine jailbreak. It installs a background
-job that deletes log files older than a day every 6 hours.
+<p align="center">
+  <a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp;
+  <a href="#using-caz"><b>Using Caz</b></a> &nbsp;·&nbsp;
+  <a href="#troubleshooting"><b>Troubleshooting</b></a> &nbsp;·&nbsp;
+  <a href="#how-it-works"><b>How it works</b></a> &nbsp;·&nbsp;
+  <a href="#building-and-testing"><b>Building</b></a>
+</p>
 
-## Build
+---
 
-Push to `main` and GitHub Actions builds it: **Actions → latest "Build Caz" run → Artifacts → Caz**.
-The download is a zip with `Caz.tipa` inside. Open `Caz.tipa` with TrollStore to install.
+iOS only clears app caches when storage is nearly full, and some things it never clears at all. That includes the
+diagnostic log archive, downloads that never finished, temp copies Photos makes when you share, and installers left in
+app inboxes. On a jailbroken phone, leftovers from earlier setups pile up on top. Caz measures all of it, shows you the
+size of each category, and removes what you choose.
 
-The workflow runs on `macos-15`: XcodeGen generates the project, `xcodebuild` builds the app
-unsigned, `clang` builds the root helper, and `scripts/package.sh` signs both with `ldid` using
-their entitlements and zips the `.tipa`.
+**Status:** first release. The root helper, which does all the measuring and deleting, is tested against a rebuilt
+copy of a real iPhone's file system. The app itself hasn't been verified on a device yet.
 
-## Why TrollStore
+> [!WARNING]
+> Caz deletes files as root, and deleted files can't be restored. It only touches the paths listed in
+> [What Caz touches](#what-caz-touches), never follows symlinks, and skips files that are still in use. Photos,
+> messages, music and app documents are never part of a clean.
 
-A normal app is sandboxed and can't read or delete system files. Caz ships a small root helper
-(`cazhelper`) and starts it as root through TrollStore's persona spawn, the same way other
-TrollStore apps do. On iOS 17, TrollStore works on 17.0 only.
+## Highlights
 
-## Layout
+| | |
+| --- | --- |
+| 🔍 **Scan first, then choose** | Every category shows its size before anything is deleted. Turn categories, or single apps, off. |
+| 🧹 **One-tap clean** | The button fills as each category finishes, and the log shows every step. |
+| 🧾 **System logs under control** | Clears the diagnostic log archive without a reboot, and can keep it to a day's worth (Dopamine). |
+| 🛡️ **Careful by design** | A fixed list of paths, no symlinks followed, files in use left alone, SpringBoard and Jetsam reports kept. |
+| 📦 **Leftovers too** | Abandoned downloads, IPAs left in app inboxes, and temp copies that Photos and other apps never deleted. |
 
+## Requirements
+
+| | |
+| --- | --- |
+| **iPhone** | iOS 17.0, arm64. Built for an iPhone 13. |
+| **TrollStore** | Required. On iOS 17 that means 17.0, the last version TrollStore supports. |
+| **Jailbreak** | Optional. Rootless Dopamine adds **Trim logs automatically**. Everything else works without it. |
+
+## Quick start
+
+1. **Download** `Caz.tipa` from the [**nightly** release](https://github.com/m9z2w4d8vw-blip/Caz/releases). It's
+   rebuilt on every push to `main`; `SHA256SUMS` lets you verify the files.
+2. **Install.** Open `Caz.tipa` with TrollStore. `Caz.ipa` is the same file under another name.
+3. **Scan.** Open Caz and tap **Scan**. Nothing is deleted yet; every category shows its size.
+4. **Choose and clean.** Turn off anything you want to keep, then tap **Clean**. The button shows the total.
+5. **Optional.** On a Dopamine jailbreak, turn on **Settings > Trim logs automatically**.
+
+> [!NOTE]
+> Caz needs TrollStore. Sideloading it with AltStore or Sideloadly installs it, but strips the permissions it needs to
+> start its root helper, so it can't measure or delete anything.
+
+> [!TIP]
+> **Maps tiles** and **Leftover installers** start switched off. Leave Maps off if you use offline maps, and check
+> which installers you still want before turning that category on.
+
+<details>
+<summary><b>Uninstalling</b></summary>
+
+<br>
+
+If **Trim logs automatically** is on, turn it off first, so the background job is removed. Then delete Caz like any
+other app. If Caz is already gone, remove the job by hand:
+
+```sh
+sudo launchctl unload /var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist
+sudo rm /var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist
 ```
-Caz/                 SwiftUI app (model, views, Objective-C spawn bridge, assets)
-Config/              Info.plist and the app's entitlements
-RootHelper/          cazhelper (C) and its entitlements
-scripts/package.sh   signs and packages Caz.tipa
-project.yml          XcodeGen spec
+
+</details>
+
+## Using Caz
+
+### The main screen
+
+- **The free space line** under the name shows what's free now and, after a clean, how much was freed.
+- **The panel** lists the categories with their sizes and a switch each. **Log** flips it to a live log of every step.
+- **App caches** has an arrow after a scan. It opens a list of every app's cache, so you can keep single apps.
+- **The button** reads **Scan**, then **Clean 9.8 GB**, then **Scan again**. It fills as each category finishes.
+
+### What gets cleaned
+
+| Category | Clears | Comes back? | Default |
+| --- | --- | --- | --- |
+| **System logs** | The diagnostic log archive (`.tracev3` files) | Within days, as iOS logs | On |
+| **Abandoned downloads** | Download temp files untouched for an hour | Only if a download keeps failing | On |
+| **Crash reports** | Crash, hang and analytics reports | With the next crash | On |
+| **System caches** | Symbol, Memoji and QuickLook caches; temp copies | Slowly, as needed | On |
+| **App caches** | Each app's cache and temp folders, and in-app browser caches | As you use the apps | On |
+| **Messages previews** | Attachment thumbnails (not the attachments) | As you scroll through chats | On |
+| **Maps tiles** | The Apple Maps tile cache | As you browse the map | Off |
+| **Leftover installers** | `.ipa`, `.tipa` and `.deb` files left in app inboxes | No | Off |
+
+> [!TIP]
+> Some apps keep downloads in their cache folder. Spotify does, so Caz always skips it. If another app loses offline
+> content after a clean, turn it off in the **App caches** list; Caz remembers.
+
+### Settings
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Keep SpringBoard and Jetsam reports** | On | Crash reports for SpringBoard and memory pressure stay, for debugging tweaks and resprings |
+| **Close apps before clearing their caches** | On | Force-closes the apps whose caches are about to be cleared |
+| **Trim logs automatically** | Off | Every 6 hours, deletes log files older than a day. Needs Dopamine |
+
+## Troubleshooting
+
+| Symptom | Likely cause | What to do |
+| --- | --- | --- |
+| *Caz couldn't get root access. Install it with TrollStore.* | Caz wasn't installed with TrollStore, so its helper can't start as root | Install `Caz.tipa` with TrollStore. |
+| *The root helper is missing from the app.* | The build didn't include `cazhelper` | Use a release build, or open the run's **Check the package** step. |
+| Log lines start with `!` | Some files were in use or protected | Close the apps involved and clean again. |
+| *Freed* is less than the scan showed | Files changed or were in use between the scan and the clean | Normal for caches being written to. Scan again to see what's left. |
+| The space comes back within days | Logs and app caches refill as you use the phone | Turn on **Trim logs automatically**. If one app refills fast, the cause is that app. |
+| **Trim logs automatically** is greyed out | No Dopamine jailbreak was found | It needs rootless Dopamine; the rest of Caz works without it. |
+| An app lost offline content | It keeps downloads in its cache folder | Turn that app off in the **App caches** list. |
+| Map tiles load slowly afterwards | The tile cache is rebuilding | It refills as you browse. Leave **Maps tiles** off if it bothers you. |
+
+When something looks wrong, switch the panel to **Log**. It shows every category, every count and every error.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph phone["iPhone"]
+        APP["Caz app<br/>scan, choose, clean"] -->|"started as root<br/>through TrollStore"| HELPER["cazhelper<br/>measures and deletes"]
+        HELPER -->|"one line per event"| APP
+        HELPER --> FILES["Logs, caches, temp files,<br/>leftover installers"]
+        HELPER -.->|"Trim logs automatically"| JOB["launchd job<br/>(Dopamine only)"]
+        JOB -.->|"every 6 hours"| FILES
+    end
 ```
 
-## Testing the helper on a computer
+A normal app is sandboxed and can't read or delete system files. Caz bundles a small C program, `cazhelper`, and
+starts it as root through TrollStore's persona spawn, the same way other TrollStore apps do. The app never touches the
+file system itself; it sends the helper a command and shows the lines that come back.
 
-The helper builds on Linux or macOS in test mode, where every path is prefixed with `CAZ_ROOT`:
+A scan and a clean work like this:
+
+```mermaid
+sequenceDiagram
+    actor You
+    participant App as Caz
+    participant Helper as cazhelper (root)
+    You->>App: Tap Scan
+    App->>Helper: scan
+    Helper-->>App: A size per category, a size per app
+    App-->>You: Clean 9.8 GB
+    You->>App: Tap Clean
+    App->>Helper: clean, with your categories and excluded apps
+    Helper-->>App: Freed, as each category finishes
+    App-->>You: The free space line updates
+```
+
+<a id="what-caz-touches"></a>
+<details>
+<summary><b>What Caz touches, the safety rules, and the helper's protocol</b></summary>
+
+<br>
+
+**What Caz touches.** Nothing outside this list. Every path is under `/private/var`.
+
+| Category | Paths | Rule |
+| --- | --- | --- |
+| System logs | `db/diagnostics` | `.tracev3` files untouched for 2 minutes. `db/uuidtext` is kept, so no reboot is needed |
+| Abandoned downloads | `mobile/Library/Caches/com.apple.nsurlsessiond/Downloads`, `tmp`, and each container's `tmp`, `Documents` and background download folder | `CFNetworkDownload_*.tmp` untouched for an hour |
+| Crash reports | `mobile/Library/Logs/CrashReporter`, `logs/CrashReporter`, `root/Library/Caches/hangtracerd`, the analytics `DiagnosticReports` | With the setting on, `SpringBoard*`, `JetsamEvent*` and `panic*` stay |
+| System caches | `com.apple.coresymbolicationd`, `com.apple.AvatarKit`, `com.apple.QuickLook.thumbnailcache`, `mobile/tmp/MediaCache`, the media analysis poster copies, `mobile/Media/PublicStaging`, TrollFools' temp folders, Photos' `photospicker` and `draganddrop` copies | Folder contents |
+| App caches | Each app's `Library/Caches`, `tmp` and in-app browser cache; apps inside LiveContainer; extensions | Spotify and Caz are always skipped |
+| Messages previews | `mobile/Library/Caches/com.apple.MobileSMS/Previews` | Messages is closed first |
+| Maps tiles | `com.apple.geod/MapTiles`, `GeoServices` | Maps is closed first; the tile service restarts after |
+| Leftover installers | `Documents/Inbox` of each app and jailbreak app | `.ipa`, `.tipa`, `.deb` untouched for an hour |
+
+**Safety rules** (all in `RootHelper/main.c`):
+
+- symlinks are never followed, and a walk never crosses into another volume;
+- a path that would be cut off is treated as missing, never shortened;
+- the folders themselves stay; only their contents go;
+- apps are found by the bundle ID in their container's metadata, never by guessing.
+
+**The protocol.** The helper prints one tab-separated line per event:
+
+| Line | Meaning |
+| --- | --- |
+| `LOG <text>` | A line for the log panel |
+| `ERR <text>` | Something went wrong; shown with a `!` |
+| `CAT <category> <bytes> <files>` | Scan result for one category |
+| `APP <bundle id> <bytes> <name>` | Scan result for one app's caches |
+| `FREED <category> <bytes> <files> <errors>` | Clean result for one category |
+| `AUTOTRIM on\|off\|unavailable` | State of the log-trim job |
+
+**The log-trim job** is `/var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist`. It runs
+`find /private/var/db/diagnostics -name '*.tracev3' -mmin +1440 -delete` at load and every 6 hours. Turning the
+setting off also removes the older hand-made `com.parv.logtrim` job, if there is one.
+
+</details>
+
+## Repository layout
+
+```text
+.
+├── Caz/                       the SwiftUI app
+│   ├── CleanerModel.swift         state, settings, and the helper protocol
+│   ├── ContentView.swift          the main screen
+│   ├── Components.swift           theme, rows, the sweep button, the log
+│   ├── SettingsView.swift, AppListView.swift
+│   ├── RootSpawn.h/.m             starts the helper as root
+│   └── Assets.xcassets            the app icon
+├── RootHelper/                cazhelper (C) and its entitlements
+├── Config/                    Info.plist and the app's entitlements
+├── scripts/package.sh         signs both binaries and packages Caz.tipa and Caz.ipa
+├── docs/images/               images for this README
+├── project.yml                XcodeGen spec (the .xcodeproj is generated, not committed)
+└── .github/workflows/         CI: build, check, publish
+```
+
+## Building and testing
+
+```mermaid
+flowchart LR
+    push["Push to GitHub"] --> app["Build the app<br/>and the helper"] --> sign["Sign and<br/>package"] --> check["Check the package"] --> rel["Nightly release<br/>or a tagged one"]
+```
+
+Every push runs `.github/workflows/build.yml` on macOS with Xcode 16.4. The build job does five things:
+
+1. generates the Xcode project with XcodeGen;
+2. builds the app with `xcodebuild` and the helper with `clang`;
+3. signs both with `ldid`, using their entitlements, and packages `Caz.tipa` and `Caz.ipa`;
+4. checks the package: both binaries, their entitlements, the icon and the version;
+5. uploads it as the `Caz-app` artifact.
+
+Pushes to `main` then republish the **nightly** pre-release with both files and `SHA256SUMS`. A tag such as `v1.2.0`
+publishes a versioned release instead. Versions are `MARKETING_VERSION` from `project.yml` plus the run number
+(`1.0.57`), so every build is newer than the last. Keep `MARKETING_VERSION` to two parts.
+
+<details>
+<summary><b>Building on a Mac, and testing the helper on any computer</b></summary>
+
+<br>
+
+You need macOS with Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen) and `ldid` (`brew install xcodegen ldid`):
+
+```sh
+xcodegen generate
+xcodebuild -project Caz.xcodeproj -scheme Caz -configuration Release -sdk iphoneos \
+  -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData \
+  CODE_SIGNING_ALLOWED=NO build
+xcrun --sdk iphoneos clang -arch arm64 -mios-version-min=17.0 -O2 \
+  -framework CoreFoundation -o build/cazhelper RootHelper/main.c
+bash scripts/package.sh            # build/Caz.tipa and build/Caz.ipa
+```
+
+The helper also builds on Linux or macOS in a test mode, where every path is prefixed with `CAZ_ROOT`. Point it at a
+copy of a file tree and it scans and cleans that instead of the real system:
 
 ```sh
 gcc -DCAZ_TEST -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -o cazhelper_test RootHelper/main.c
 CAZ_ROOT=/path/to/fake/root ./cazhelper_test scan --keep-sb
+CAZ_ROOT=/path/to/fake/root ./cazhelper_test clean logs,downloads --keep-sb
 ```
+
+</details>
