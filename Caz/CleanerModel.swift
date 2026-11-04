@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 struct CleanCategory: Identifiable, Equatable {
     let id: String
@@ -15,6 +16,14 @@ struct AppCache: Identifiable, Equatable {
     let id: String
     let name: String
     let bytes: Int64
+}
+
+/// One line of the lyrics-style log, like DOLyricsLogItemView.
+struct LyricLine: Identifiable, Equatable {
+    enum Status: Equatable { case running, completed, failed, success }
+    let id = UUID()
+    var text: String
+    var status: Status
 }
 
 enum Phase: Equatable {
@@ -62,8 +71,12 @@ final class CleanerModel: ObservableObject {
     @Published var apps: [AppCache] = []
     @Published var excluded: Set<String> = []
     @Published var log: [String] = []
+    @Published var lyrics: [LyricLine] = []
     @Published var phase: Phase = .idle
-    @Published var progress: Double = 0
+    @Published var sheetVisible = false
+    @Published var sheetTitle = "Scanning"
+    @Published var completedSteps = 0
+    @Published var successCount = 0
     @Published var freeBytes: Int64 = 0
     @Published var autoTrim: AutoTrimState = .unknown
     @Published var problem: String? = nil
@@ -75,8 +88,6 @@ final class CleanerModel: ObservableObject {
     }
 
     private var freedTotal: Int64 = 0
-    private var stepsDone = 0
-    private var stepsTotal = 1
     private let queue = DispatchQueue(label: "com.parv.caz.helper", qos: .userInitiated)
 
     private enum Keys {
@@ -118,11 +129,50 @@ final class CleanerModel: ObservableObject {
         categories.filter(\.enabled).reduce(Int64(0)) { $0 + (displayBytes(for: $1) ?? 0) }
     }
 
+    /// First line under the name, like Dopamine's version and device line.
+    var headerSubtitle: String {
+        "iOS \(UIDevice.current.systemVersion) | \(Self.format(freeBytes)) free"
+    }
+
+    /// Second line under the name, like Dopamine's credits line.
+    var headerDetail: String {
+        if let problem { return problem }
+        switch phase {
+        case .idle, .scanning:
+            return "Storage cleaner for TrollStore"
+        case .scanned:
+            return selectedBytes > 0 ? "\(Self.format(selectedBytes)) can be cleaned" : "Nothing to clean right now"
+        case .cleaning:
+            return "Cleaning…"
+        case .done(let freed):
+            return "Freed \(Self.format(freed))"
+        }
+    }
+
+    var buttonTitle: String {
+        switch phase {
+        case .idle: return "Scan"
+        case .scanning: return "Scanning"
+        case .scanned: return selectedBytes > 0 ? "Clean \(Self.format(selectedBytes))" : "Scan Again"
+        case .cleaning: return "Cleaning"
+        case .done: return "Scan Again"
+        }
+    }
+
+    var buttonSymbol: String {
+        switch phase {
+        case .idle: return "magnifyingglass"
+        case .scanned: return selectedBytes > 0 ? "trash" : "arrow.clockwise"
+        case .done: return "arrow.clockwise"
+        case .scanning, .cleaning: return "hourglass"
+        }
+    }
+
     // MARK: - Actions
 
     func onAppear() {
         if !FileManager.default.fileExists(atPath: helperPath) {
-            problem = "The root helper is missing from the app. Rebuild Caz from the repo."
+            problem = "The root helper is missing from the app."
         }
         refreshAutoTrim()
     }
@@ -143,12 +193,14 @@ final class CleanerModel: ObservableObject {
         guard !isBusy else { return }
         phase = .scanning
         log.removeAll()
+        lyrics.removeAll()
         apps.removeAll()
         for index in categories.indices {
             categories[index].bytes = nil
             categories[index].files = 0
         }
-        begin(steps: categories.count)
+        sheetTitle = "Scanning"
+        sheetVisible = true
         append("Scanning…")
         var args = ["scan"]
         if keepSpringBoard { args.append("--keep-sb") }
@@ -158,10 +210,13 @@ final class CleanerModel: ObservableObject {
             if status == 0 {
                 self.phase = .scanned
                 self.append("You can free about \(Self.format(self.selectedBytes)).")
+                self.finishLyrics(success: "Found \(Self.format(self.selectedBytes))")
             } else {
                 self.phase = .idle
                 self.append("Scan stopped (code \(status)).")
+                self.failLyrics("Scan stopped")
             }
+            self.collapseSoon()
         }
     }
 
@@ -174,7 +229,9 @@ final class CleanerModel: ObservableObject {
         }
         phase = .cleaning
         freedTotal = 0
-        begin(steps: ids.count)
+        lyrics.removeAll()
+        sheetTitle = "Cleaning"
+        sheetVisible = true
         var args = ["clean", ids.joined(separator: ",")]
         if keepSpringBoard { args.append("--keep-sb") }
         if closeApps { args.append("--close-apps") }
@@ -183,14 +240,20 @@ final class CleanerModel: ObservableObject {
         runHelper(args) { [weak self] status in
             guard let self = self else { return }
             self.freeBytes = Self.currentFreeBytes()
-            self.progress = 1
             self.phase = .done(freed: self.freedTotal)
             if status == 0 {
                 self.append("Freed \(Self.format(self.freedTotal)).")
+                self.finishLyrics(success: "Freed \(Self.format(self.freedTotal))")
             } else {
                 self.append("Cleaning stopped (code \(status)). Lines starting with ! show what failed.")
+                self.failLyrics("Cleaning stopped")
             }
+            self.collapseSoon()
         }
+    }
+
+    func respring() {
+        runHelper(["respring"]) { _ in }
     }
 
     func refreshAutoTrim() {
@@ -205,6 +268,56 @@ final class CleanerModel: ObservableObject {
     func append(_ text: String) {
         log.append(text)
         if log.count > 3000 { log.removeFirst(log.count - 3000) }
+    }
+
+    // MARK: - Lyrics log
+
+    private func startLyric(_ text: String) {
+        completeRunningLyric()
+        lyrics.append(LyricLine(text: text, status: .running))
+    }
+
+    private func finishLyric(_ text: String) {
+        if let index = lyrics.lastIndex(where: { $0.status == .running }) {
+            lyrics[index].text = text
+            lyrics[index].status = .completed
+            completedSteps += 1
+        } else {
+            lyrics.append(LyricLine(text: text, status: .completed))
+        }
+    }
+
+    private func completeRunningLyric() {
+        for index in lyrics.indices where lyrics[index].status == .running {
+            lyrics[index].status = .completed
+            completedSteps += 1
+        }
+    }
+
+    private func finishLyrics(success text: String) {
+        completeRunningLyric()
+        lyrics.append(LyricLine(text: text, status: .success))
+        sheetTitle = "Done"
+        successCount += 1
+    }
+
+    private func failLyrics(_ text: String) {
+        for index in lyrics.indices where lyrics[index].status == .running {
+            lyrics[index].status = .failed
+        }
+        lyrics.append(LyricLine(text: text, status: .failed))
+        sheetTitle = "Stopped"
+    }
+
+    /// Keep the finished log on screen for a moment, then fold the button back.
+    private func collapseSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            self?.sheetVisible = false
+        }
+    }
+
+    private func title(for id: String) -> String {
+        categories.first(where: { $0.id == id })?.title ?? id
     }
 
     // MARK: - Helper plumbing
@@ -231,25 +344,36 @@ final class CleanerModel: ObservableObject {
         let fields = line.components(separatedBy: "\t")
         switch fields[0] {
         case "LOG":
-            append(fields.dropFirst().joined(separator: " "))
+            let text = fields.dropFirst().joined(separator: " ")
+            append(text)
+            if text.hasPrefix("Measuring ") || text.hasPrefix("Cleaning ") {
+                startLyric(text)
+            }
         case "ERR":
-            append("! " + fields.dropFirst().joined(separator: " "))
+            let text = fields.dropFirst().joined(separator: " ")
+            append("! " + text)
+            if let index = lyrics.lastIndex(where: { $0.status == .running }) {
+                lyrics[index].status = .failed
+            }
+            lyrics.append(LyricLine(text: text, status: .failed))
         case "CAT" where fields.count >= 4:
+            let bytes = Int64(fields[2]) ?? 0
             if let index = categories.firstIndex(where: { $0.id == fields[1] }) {
-                categories[index].bytes = Int64(fields[2]) ?? 0
+                categories[index].bytes = bytes
                 categories[index].files = Int(fields[3]) ?? 0
             }
-            step()
+            finishLyric("\(title(for: fields[1])): \(Self.format(bytes))")
         case "APP" where fields.count >= 4:
             apps.append(AppCache(id: fields[1], name: fields[3], bytes: Int64(fields[2]) ?? 0))
         case "FREED" where fields.count >= 3:
-            freedTotal += Int64(fields[2]) ?? 0
+            let bytes = Int64(fields[2]) ?? 0
+            freedTotal += bytes
             if let index = categories.firstIndex(where: { $0.id == fields[1] }) {
                 categories[index].bytes = 0
                 categories[index].files = 0
             }
             if fields[1] == "appcache" { apps.removeAll() }
-            step()
+            finishLyric("\(title(for: fields[1])): freed \(Self.format(bytes))")
         case "AUTOTRIM" where fields.count >= 2:
             switch fields[1] {
             case "on": autoTrim = .on
@@ -259,17 +383,6 @@ final class CleanerModel: ObservableObject {
         default:
             if !line.isEmpty { append(line) }
         }
-    }
-
-    private func begin(steps: Int) {
-        stepsDone = 0
-        stepsTotal = max(1, steps)
-        progress = 0
-    }
-
-    private func step() {
-        stepsDone += 1
-        progress = min(1, Double(stepsDone) / Double(stepsTotal))
     }
 
     // MARK: - Formatting

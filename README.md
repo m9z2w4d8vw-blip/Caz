@@ -44,8 +44,9 @@ copy of a real iPhone's file system. The app itself hasn't been verified on a de
 
 | | |
 | --- | --- |
+| 🎨 **Dopamine-style interface** | The menu, the button that opens into a live log, and the windows follow Dopamine's design, in Caz's yellow. |
 | 🔍 **Scan first, then choose** | Every category shows its size before anything is deleted. Turn categories, or single apps, off. |
-| 🧹 **One-tap clean** | The button fills as each category finishes, and the log shows every step. |
+| 🧹 **One-tap clean** | The button opens into a log that checks off each category as it finishes. |
 | 🧾 **System logs under control** | Clears the diagnostic log archive without a reboot, and can keep it to a day's worth (Dopamine). |
 | 🛡️ **Careful by design** | A fixed list of paths, no symlinks followed, files in use left alone, SpringBoard and Jetsam reports kept. |
 | 📦 **Leftovers too** | Abandoned downloads, IPAs left in app inboxes, and temp copies that Photos and other apps never deleted. |
@@ -94,10 +95,17 @@ sudo rm /var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist
 
 ### The main screen
 
-- **The free space line** under the name shows what's free now and, after a clean, how much was freed.
-- **The panel** lists the categories with their sizes and a switch each. **Log** flips it to a live log of every step.
-- **App caches** has an arrow after a scan. It opens a list of every app's cache, so you can keep single apps.
-- **The button** reads **Scan**, then **Clean 9.8 GB**, then **Scan again**. It fills as each category finishes.
+The layout follows Dopamine's: the name and two status lines at the top, a menu in the middle, and one big button
+at the bottom.
+
+- **The status lines** show the iOS version and free space, then what a scan found or a clean freed.
+- **The menu** opens Categories, App Caches, Settings and Credits as windows in the middle of the screen. Tap outside
+  a window to close it. **Restart SpringBoard** fades the screen to black and resprings.
+- **The big button** reads **Scan**, then **Clean 9.8 GB**, then **Scan Again**. Tapping it folds the menu away and
+  opens the button into a log: each category appears as a line, gets a checkmark when it's done, and the last line
+  shows the total. The button folds back on its own.
+- **Categories** lists every category with its size and a switch. **App Caches** lists every app's cache after a
+  scan, so you can keep single apps.
 
 ### What gets cleaned
 
@@ -124,20 +132,22 @@ sudo rm /var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist
 | **Close apps before clearing their caches** | On | Force-closes the apps whose caches are about to be cleared |
 | **Trim logs automatically** | Off | Every 6 hours, deletes log files older than a day. Needs Dopamine |
 
+**View Log**, at the bottom of Settings, shows every line from the last scan or clean.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | What to do |
 | --- | --- | --- |
-| *Caz couldn't get root access. Install it with TrollStore.* | Caz wasn't installed with TrollStore, so its helper can't start as root | Install `Caz.tipa` with TrollStore. |
-| *The root helper is missing from the app.* | The build didn't include `cazhelper` | Use a release build, or open the run's **Check the package** step. |
-| Log lines start with `!` | Some files were in use or protected | Close the apps involved and clean again. |
+| The status line reads *Caz couldn't get root access. Install it with TrollStore.* | Caz wasn't installed with TrollStore, so its helper can't start as root | Install `Caz.tipa` with TrollStore. |
+| The status line reads *The root helper is missing from the app.* | The build didn't include `cazhelper` | Use a release build, or open the run's **Check the package** step. |
+| Lines in **View Log** start with `!` | Some files were in use or protected | Close the apps involved and clean again. |
 | *Freed* is less than the scan showed | Files changed or were in use between the scan and the clean | Normal for caches being written to. Scan again to see what's left. |
 | The space comes back within days | Logs and app caches refill as you use the phone | Turn on **Trim logs automatically**. If one app refills fast, the cause is that app. |
 | **Trim logs automatically** is greyed out | No Dopamine jailbreak was found | It needs rootless Dopamine; the rest of Caz works without it. |
 | An app lost offline content | It keeps downloads in its cache folder | Turn that app off in the **App caches** list. |
 | Map tiles load slowly afterwards | The tile cache is rebuilding | It refills as you browse. Leave **Maps tiles** off if it bothers you. |
 
-When something looks wrong, switch the panel to **Log**. It shows every category, every count and every error.
+When something looks wrong, open **Settings > View Log**. It shows every category, every count and every error.
 
 ## How it works
 
@@ -221,12 +231,14 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 ```text
 .
 ├── Caz/                       the SwiftUI app
-│   ├── CleanerModel.swift         state, settings, and the helper protocol
-│   ├── ContentView.swift          the main screen
-│   ├── Components.swift           theme, rows, the sweep button, the log
-│   ├── SettingsView.swift, AppListView.swift
+│   ├── CleanerModel.swift         state, settings, the log, and the helper protocol
+│   ├── ContentView.swift          the main screen: header, menu, the button and its log
+│   ├── MainComponents.swift       header, menu rows, the button, the lyrics log, spinners
+│   ├── Windows.swift              Categories, App Caches, Settings, Log, Credits
+│   ├── Theme.swift                colours, metrics and the backdrop
 │   ├── RootSpawn.h/.m             starts the helper as root
-│   └── Assets.xcassets            the app icon
+│   ├── Resources/                 LICENSE-Dopamine.txt, shown in Credits
+│   └── Assets.xcassets            the app icon and the yellow backdrop
 ├── RootHelper/                cazhelper (C) and its entitlements
 ├── Config/                    Info.plist and the app's entitlements
 ├── scripts/package.sh         signs both binaries and packages Caz.tipa and Caz.ipa
@@ -234,6 +246,12 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 ├── project.yml                XcodeGen spec (the .xcodeproj is generated, not committed)
 └── .github/workflows/         CI: build, check, publish
 ```
+
+## Credits
+
+Caz's interface is based on [Dopamine](https://github.com/opa334/Dopamine)'s, by Lars Fröder (opa334), used under
+the MIT License. The license ships inside the app (**Credits > Dopamine License (MIT)**) and in
+`Caz/Resources/LICENSE-Dopamine.txt`. Caz starts its root helper the way TrollStore apps do.
 
 ## Building and testing
 
@@ -247,7 +265,7 @@ Every push runs `.github/workflows/build.yml` on macOS with Xcode 16.4. The buil
 1. generates the Xcode project with XcodeGen;
 2. builds the app with `xcodebuild` and the helper with `clang`;
 3. signs both with `ldid`, using their entitlements, and packages `Caz.tipa` and `Caz.ipa`;
-4. checks the package: both binaries, their entitlements, the icon and the version;
+4. checks the package: both binaries, their entitlements, the icon, the bundled Dopamine license and the version;
 5. uploads it as the `Caz-app` artifact.
 
 Pushes to `main` then republish the **nightly** pre-release with both files and `SHA256SUMS`. A tag such as `v1.2.0`

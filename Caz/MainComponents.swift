@@ -1,0 +1,265 @@
+import SwiftUI
+import UIKit
+
+// The main screen's pieces: header, action menu, the big button and the log it expands into.
+// Each mirrors a Dopamine class: DOHeaderView, DOActionMenuView/Button, DOJailbreakButton,
+// DOLyricsLogView/ItemView, DOLoadingIndicator and DODoubleHelixIndicator.
+
+struct HeaderView: View {
+    let subtitle: String
+    let detail: String
+    var detailIsWarning = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Caz")
+                .font(.system(size: 40, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(height: 46, alignment: .bottom)
+            Text(subtitle)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white)
+            Text(detail)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(detailIsWarning ? Theme.failure : Theme.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 5)
+        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+        .shadow(color: .black.opacity(0.3), radius: 30)
+    }
+}
+
+struct MenuItem: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    var chevron = false
+    var enabled = true
+    let action: () -> Void
+}
+
+struct ActionMenu: View {
+    let items: [MenuItem]
+    let rowHeight: CGFloat
+    let innerPadding: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                MenuRow(item: item, height: rowHeight)
+                    .overlay(alignment: .bottom) {
+                        if index < items.count - 1 {
+                            Capsule()
+                                .fill(Theme.separator)
+                                .frame(height: 1)
+                                .padding(.horizontal, 10)
+                        }
+                    }
+            }
+        }
+        .padding(.horizontal, innerPadding)
+        .padding(.vertical, Metrics.innerTopPadding)
+        .background(Theme.menu, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+struct MenuRow: View {
+    let item: MenuItem
+    let height: CGFloat
+
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            item.action()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: item.symbol)
+                    .font(.system(size: 14, weight: .medium))
+                Text(item.title)
+                    .font(.system(size: 17))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Spacer(minLength: 0)
+                if item.chevron {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                        .padding(.trailing, 10)
+                }
+            }
+            .foregroundStyle(Theme.foreground)
+            .frame(height: height)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MenuButtonStyle())
+        .disabled(!item.enabled)
+        .opacity(item.enabled ? 1 : 0.45)
+    }
+}
+
+/// The big button under the menu (DOJailbreakButton before it expands).
+struct ActionButton: View {
+    let title: String
+    let symbol: String
+    let enabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .medium))
+                Text(title)
+                    .font(.system(size: 17))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .foregroundStyle(Theme.foreground)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MenuButtonStyle())
+        .disabled(!enabled)
+        .background(Theme.menu, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .opacity(enabled ? 1 : 0.7)
+    }
+}
+
+/// The big button after it expands: a panel reaching past the bottom of the screen,
+/// with a title and the lyrics-style log.
+struct LogSheet: View {
+    @ObservedObject var model: CleanerModel
+    let visibleHeight: CGFloat
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.menu)
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    DoubleHelix()
+                        .frame(width: 30, height: 12)
+                    Text(model.sheetTitle)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(.white)
+                }
+                .padding(.top, 20)
+                LyricsLog(lines: model.lyrics, bottomInset: Metrics.isHomeButtonDevice ? 50 : 80)
+            }
+            .frame(height: visibleHeight, alignment: .top)
+        }
+    }
+}
+
+/// New lines appear at the bottom and push older ones up, where they fade out.
+struct LyricsLog: View {
+    let lines: [LyricLine]
+    let bottomInset: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 0)
+            ForEach(lines.suffix(14)) { line in
+                LyricRow(line: line)
+                    .frame(height: 40)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 8)),
+                        removal: .opacity
+                    ))
+            }
+        }
+        .padding(.horizontal, 25)
+        .padding(.bottom, max(0, bottomInset - 40))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .clipped()
+        .mask {
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: 0.45),
+                .init(color: .black, location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+        }
+        .animation(.easeOut(duration: 0.3), value: lines)
+    }
+}
+
+struct LyricRow: View {
+    let line: LyricLine
+
+    var body: some View {
+        HStack(spacing: 15) {
+            ZStack {
+                switch line.status {
+                case .running:
+                    Spinner()
+                case .completed:
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 19))
+                case .failed:
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.system(size: 19))
+                case .success:
+                    Image(systemName: "externaldrive.badge.checkmark")
+                        .font(.system(size: 19))
+                }
+            }
+            .frame(width: 30, height: 30)
+            Text(line.text)
+                .font(.system(size: line.status == .running ? 20 : 18))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .foregroundStyle(.white)
+        .opacity(line.status == .running ? 0.9 : 0.5)
+        .animation(.easeOut(duration: 0.2), value: line.status)
+    }
+}
+
+/// A ring that turns once a second.
+struct Spinner: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            Circle()
+                .trim(from: 0, to: 0.72)
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .frame(width: 20, height: 20)
+                .rotationEffect(.degrees(t.truncatingRemainder(dividingBy: 1.0) * 360))
+        }
+    }
+}
+
+/// Two rows of ten dots that wave past each other, every 2.3 seconds.
+struct DoubleHelix: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<10, id: \.self) { i in
+                    let p = DoubleHelix.wave(t - 0.1 * Double(i))
+                    Circle()
+                        .fill(Color.white.opacity(0.8))
+                        .frame(width: 2, height: 2)
+                        .offset(x: CGFloat(i) * 3, y: 8 - 8 * p)
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 2, height: 2)
+                        .offset(x: CGFloat(i) * 3, y: 8 * p)
+                }
+            }
+            .frame(width: 30, height: 12, alignment: .topLeading)
+        }
+    }
+
+    static func wave(_ t: Double) -> CGFloat {
+        let period = 2.3
+        var phase = t.truncatingRemainder(dividingBy: period)
+        if phase < 0 { phase += period }
+        return CGFloat(0.5 - 0.5 * cos(phase / period * 2 * Double.pi))
+    }
+}

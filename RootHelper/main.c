@@ -15,6 +15,7 @@
 //   cazhelper scan  [--keep-sb]
 //   cazhelper clean <cat,cat,...> [--keep-sb] [--close-apps] [--exclude id,id,...]
 //   cazhelper autotrim status|enable|disable
+//   cazhelper respring
 //   cazhelper version
 //
 // Safety rules: never follows symlinks, never crosses into another volume, only touches
@@ -731,13 +732,19 @@ int main(int argc, char **argv) {
     }
 #endif
     if (argc < 2) {
-        emit("ERR\tusage: cazhelper scan | clean <categories> | autotrim status|enable|disable | version");
+        emit("ERR\tusage: cazhelper scan | clean <categories> | autotrim status|enable|disable | respring | version");
         return 2;
     }
     if (strcmp(argv[1], "version") == 0) { emit("LOG\tcazhelper %s", CAZ_VERSION); return 0; }
     if (strcmp(argv[1], "scan") == 0) { parse_options(argc, argv, 2); do_scan(); return 0; }
     if (strcmp(argv[1], "clean") == 0 && argc >= 3) { parse_options(argc, argv, 3); do_clean(argv[2]); return 0; }
     if (strcmp(argv[1], "autotrim") == 0 && argc >= 3) return do_autotrim(argv[2]);
+    if (strcmp(argv[1], "respring") == 0) {
+        emit("LOG\tRestarting SpringBoard");
+        if (kill_procs(m_exact, "/System/Library/CoreServices/SpringBoard.app/SpringBoard") == 0)
+            emit("ERR\tSpringBoard wasn't found");
+        return 0;
+    }
     emit("ERR\tUnknown command: %s", argv[1]);
     return 2;
 }
