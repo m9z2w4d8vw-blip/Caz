@@ -30,8 +30,14 @@ struct ContentView: View {
         .ignoresSafeArea()
         .animation(.spring(response: 0.75, dampingFraction: 0.9), value: model.sheetVisible)
         .animation(.spring(response: 0.6, dampingFraction: 0.9), value: window)
-        .sensoryFeedback(.impact(weight: .light), trigger: model.completedSteps)
-        .sensoryFeedback(.success, trigger: model.successCount)
+        // A light tap as each category finishes and a success buzz at the end. UIKit's generators,
+        // because sensoryFeedback needs iOS 17.
+        .onChange(of: model.completedSteps) { steps in
+            if steps > 0 { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        }
+        .onChange(of: model.successCount) { count in
+            if count > 0 { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        }
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: updater.isAvailable)
         .onAppear {
             model.onAppear()

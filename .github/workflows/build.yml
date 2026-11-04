@@ -90,7 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          xcrun --sdk iphoneos clang -arch arm64 -mios-version-min=17.0 -O2 -Wall \
+          xcrun --sdk iphoneos clang -arch arm64 -mios-version-min=16.0 -O2 -Wall \
             -framework CoreFoundation -o build/cazhelper RootHelper/main.c
 
       - name: Sign and package Caz.tipa and Caz.ipa

@@ -150,7 +150,7 @@ struct DownloadView: View {
             .frame(width: geo.size.width * 0.8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onChange(of: updater.stage) { _, stage in
+        .onChange(of: updater.stage) { stage in
             if stage == .installing {
                 withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) { dimmed = true }
             } else {

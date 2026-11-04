@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/m9z2w4d8vw-blip/Caz/actions/workflows/build.yml"><img src="https://github.com/m9z2w4d8vw-blip/Caz/actions/workflows/build.yml/badge.svg" alt="build"></a>
   <a href="https://github.com/m9z2w4d8vw-blip/Caz/releases/latest"><img src="https://img.shields.io/github/v/release/m9z2w4d8vw-blip/Caz?label=download&color=FFB21E&logo=github" alt="download"></a>
-  <img src="https://img.shields.io/badge/iOS-17.0-1B1446?logo=apple&logoColor=white" alt="iOS 17.0">
+  <img src="https://img.shields.io/badge/iOS-16.0%E2%80%9317.0-1B1446?logo=apple&logoColor=white" alt="iOS 16.0 to 17.0">
   <img src="https://img.shields.io/badge/app-TrollStore-FFB21E" alt="TrollStore app">
   <img src="https://img.shields.io/badge/auto--trim-Dopamine%20rootless-5B2BB5" alt="Dopamine rootless for auto-trim">
 </p>
@@ -32,7 +32,7 @@ diagnostic log archive, downloads that never finished, temp copies Photos makes 
 app inboxes. On a jailbroken phone, leftovers from earlier setups pile up on top. Caz measures all of it, shows you the
 size of each category, and removes what you choose.
 
-**Status:** in use on an iPhone 13 running iOS 17.0. The root helper, which does all the measuring and deleting, is
+**Status:** in use on an iPhone 13 running iOS 17.0. iOS 16 is supported but hasn't been tried on a device yet. The root helper, which does all the measuring and deleting, is
 also tested against a rebuilt copy of a real iPhone's file system.
 
 > [!WARNING]
@@ -56,9 +56,9 @@ also tested against a rebuilt copy of a real iPhone's file system.
 
 | | |
 | --- | --- |
-| **iPhone** | iOS 17.0, arm64. Built for an iPhone 13. |
-| **TrollStore** | Required. On iOS 17 that means 17.0, the last version TrollStore supports. |
-| **Jailbreak** | Optional. Rootless Dopamine adds **Trim logs automatically**. Everything else works without it. |
+| **iPhone** | iOS 16.0 to 16.6.1, the 16.7 RC, or 17.0. Built and tested on an iPhone 13 running 17.0. |
+| **TrollStore** | Required. Caz supports exactly the iOS 16 and 17 versions TrollStore runs on: up to 16.6.1 (plus the 16.7 RC) and 17.0. |
+| **Jailbreak** | Optional. A rootless jailbreak, such as Dopamine or palera1n, adds **Trim logs automatically**. Everything else works without it. |
 
 ## Quick start
 
@@ -327,7 +327,7 @@ xcodegen generate
 xcodebuild -project Caz.xcodeproj -scheme Caz -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData \
   CODE_SIGNING_ALLOWED=NO build
-xcrun --sdk iphoneos clang -arch arm64 -mios-version-min=17.0 -O2 \
+xcrun --sdk iphoneos clang -arch arm64 -mios-version-min=16.0 -O2 \
   -framework CoreFoundation -o build/cazhelper RootHelper/main.c
 bash scripts/package.sh            # build/Caz.tipa and build/Caz.ipa
 ```
