@@ -35,12 +35,14 @@ struct Wordmark: View {
     var body: some View {
         if let image = UIImage(named: "Wordmark") {
             // Dopamine draws its title from an image (Dopamine.imageset): 40 pt tall, 7 pt high.
+            // Caz's Wordmark.imageset is drawn the same way, in Fonarto Regular (scripts/make_wordmark.py).
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
                 .frame(height: 40, alignment: .leading)
                 .offset(y: -7)
                 .accessibilityLabel("Caz")
+                .accessibilityAddTraits(.isHeader)
         } else {
             text
         }

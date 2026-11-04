@@ -270,10 +270,11 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 │   ├── UpdateViews.swift          the changelog, the download ring and the update buttons
 │   ├── AppIcons.h/.m              looks up app icons for the App Caches list
 │   ├── Resources/                 LICENSE-Dopamine.txt and the wordmark font
-│   └── Assets.xcassets            the app icon and the yellow backdrop
+│   └── Assets.xcassets            the app icon, the yellow backdrop and the title
 ├── RootHelper/                cazhelper (C) and its entitlements
 ├── Config/                    Info.plist and the app's entitlements
 ├── scripts/package.sh         signs both binaries and packages Caz.tipa and Caz.ipa
+├── scripts/make_wordmark.py   draws the title image from the Fonarto font file
 ├── docs/images/               images for this README
 ├── project.yml                XcodeGen spec (the .xcodeproj is generated, not committed)
 └── .github/workflows/         CI: build, check, publish
@@ -284,12 +285,14 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 Caz's interface is based on [Dopamine](https://github.com/opa334/Dopamine)'s, by Lars Fröder (opa334), used under
 the MIT License, which ships inside the app bundle and in `Caz/Resources/LICENSE-Dopamine.txt`. Caz starts its root helper the way TrollStore apps do.
 
-Dopamine's title is a picture, not live text: `Dopamine.imageset` holds it at 1x, 2x and 3x, drawn in Fonarto. Caz
-works the same way: a `Wordmark` image in `Assets.xcassets` is used when it's there, at Dopamine's 40 pt height.
-Without it, Caz uses the first `.ttf` or `.otf` in `Caz/Resources`, then SF Rounded Bold.
+Dopamine's title is a picture, not live text: `Dopamine.imageset` holds it at 1x, 2x and 3x, drawn in Fonarto
+Regular. Caz's title works the same way. `Caz/Assets.xcassets/Wordmark.imageset` holds "Caz" drawn in
+[Fonarto](https://www.fontspace.com/fonarto-2-font-f104632) Regular with the letter spacing measured from Dopamine's
+title (-0.65% of the em), shown 40 pt tall like Dopamine's. The font file itself isn't shipped, only the picture.
+Fonarto is by Locomotype (Arwan Sutanto) and is free for personal and commercial use.
 
-[Fonarto](https://www.fontspace.com/fonarto-2-font-f104632) is by Locomotype (Arwan Sutanto) and is free for personal
-and commercial use. Dopamine's title matches its **Bold** weight.
+To redraw it, run `scripts/make_wordmark.py` with the font file (it needs Pillow). If the image is ever missing, Caz
+uses the first `.ttf` or `.otf` in `Caz/Resources`, then SF Rounded Bold.
 
 ## Building and testing
 
