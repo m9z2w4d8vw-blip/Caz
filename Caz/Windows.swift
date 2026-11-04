@@ -251,13 +251,16 @@ struct SettingsWindow: View {
             List {
                 Section {
                     Toggle("Keep SpringBoard and Jetsam Reports", isOn: $model.keepSpringBoard)
+                        .font(.system(size: 15))
                         .foregroundStyle(.white)
                         .windowRow()
                     Toggle("Close Apps Before Clearing Caches", isOn: $model.closeApps)
+                        .font(.system(size: 15))
                         .foregroundStyle(.white)
                         .windowRow()
                 } header: {
                     Text("Cleaning")
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.6))
                 }
 
@@ -266,14 +269,17 @@ struct SettingsWindow: View {
                         get: { model.autoTrim == .on },
                         set: { model.setAutoTrim($0) }
                     ))
+                    .font(.system(size: 15))
                     .foregroundStyle(.white)
                     .disabled(model.autoTrim == .unavailable || model.autoTrim == .unknown)
                     .windowRow()
                 } header: {
                     Text("System Logs")
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.6))
                 } footer: {
                     Text(autoTrimFooter)
+                        .font(.system(size: 12))
                         .foregroundStyle(Color.white.opacity(0.5))
                 }
 
@@ -281,6 +287,7 @@ struct SettingsWindow: View {
                     Button(action: openLog) {
                         HStack {
                             Text("View Log")
+                                .font(.system(size: 15))
                                 .foregroundStyle(.white)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -292,7 +299,8 @@ struct SettingsWindow: View {
                     .buttonStyle(MenuButtonStyle())
                     .windowRow()
                 } footer: {
-                    Text("Every line from the last scan or clean.")
+                    Text("Every line from the last scan or clean, and Export Tree at the bottom.")
+                        .font(.system(size: 12))
                         .foregroundStyle(Color.white.opacity(0.5))
                 }
             }
@@ -315,6 +323,7 @@ struct SettingsWindow: View {
 struct LogWindow: View {
     @ObservedObject var model: CleanerModel
     let onBack: () -> Void
+    let onExport: () -> Void
 
     var body: some View {
         WindowCard(title: "Log", onBack: onBack) {
@@ -330,6 +339,15 @@ struct LogWindow: View {
                             .foregroundStyle(line.hasPrefix("!") ? Theme.failure : Color.white.opacity(0.85))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    // After the last line, so it shows once you've scrolled all the way down.
+                    ActionButton(title: "Export Tree", symbol: "square.and.arrow.down",
+                                 enabled: !model.isBusy, action: onExport)
+                        .frame(height: 50)
+                        .padding(.top, 20)
+                    Text("Lists every file and folder on your iPhone with its size, like du -ak / over SSH, and saves it to On My iPhone › Caz.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .padding(.top, 4)
                 }
                 .textSelection(.enabled)
                 .padding(16)

@@ -9,6 +9,10 @@
 //   CAT   <category> <bytes> <files>              (scan result)
 //   APP   <bundle id> <bytes> <name> <note>       (per-app cache size, during scan)
 //   SKIP  <bundle id> <bytes> <name> <reason>     (an app whose cache is never touched)
+//   STEP  <id> <title>                            (tree: a part of the phone starts)
+//   PROG  <items> <items in this part>            (tree: every 25,000 items)
+//   DONE  <id> <kb> <items>                       (tree: a part of the phone is listed)
+//   SAVED <path> <bytes> <items>                  (tree: the listing is written)
 //   FREED <category> <bytes> <files> <errors>     (clean result)
 //   AUTOTRIM on|off|unavailable
 //
@@ -17,6 +21,7 @@
 //   cazhelper clean <cat,cat,...> [--keep-sb] [--close-apps] [--exclude id,id,...]
 //   cazhelper autotrim status|enable|disable
 //   cazhelper install-update <path to .tipa>
+//   cazhelper tree <path to .txt>
 //   cazhelper version
 //
 // Safety rules: never follows symlinks, never crosses into another volume, only touches
@@ -35,6 +40,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <fts.h>
 #include <spawn.h>
 #include <sys/types.h>
@@ -769,6 +775,258 @@ static int do_autotrim(const char *verb) {
     return 2;
 }
 
+// ---------------------------------------------------------------- tree export
+
+// `cazhelper tree <file.txt>` lists every file and folder on the phone in the format of
+// `sudo du -ak /`: one line each, the size in KB, a tab, then the path. Folders come after their
+// contents and "/" comes last. Hard-linked files are counted once, as du does, and nothing is ever
+// followed through a symlink. The walk reports its progress in six parts, which follow one another
+// because a few folders are walked in a fixed order (k_tree_order).
+
+typedef struct { const char *id, *title, *start; } TreeSection;
+static const TreeSection k_tree_sections[] = {
+    { "system",  "System files",      "/" },
+    { "preboot", "Preboot",           "/private/preboot" },
+    { "sysdata", "System data",       "/private/var" },
+    { "bundles", "Installed apps",    "/private/var/containers" },
+    { "library", "Library and media", "/private/var/mobile" },
+    { "appdata", "App data",          "/private/var/mobile/Containers" },
+};
+#define TREE_SECTIONS ((int)(sizeof k_tree_sections / sizeof k_tree_sections[0]))
+
+// In these folders, the named children are walked last, in this order; everything else is A to Z.
+typedef struct { const char *parent; const char *last[3]; } TreeOrder;
+static const TreeOrder k_tree_order[] = {
+    { "/",                   { "private", NULL } },
+    { "/private",            { "preboot", "var", NULL } },
+    { "/private/var",        { "containers", "mobile", NULL } },
+    { "/private/var/mobile", { "Containers", NULL } },
+    { NULL,                  { NULL } },
+};
+
+// Files with more than one hard link, seen so far (open addressing on device and inode).
+typedef struct { dev_t dev; ino_t ino; int used; } LinkSlot;
+typedef struct { LinkSlot *v; size_t cap, n; } LinkSet;
+
+static size_t link_hash(dev_t dev, ino_t ino) {
+    uint64_t h = (uint64_t)ino * 0x9E3779B97F4A7C15ull ^ (uint64_t)dev;
+    return (size_t)(h ^ (h >> 31));
+}
+
+static int link_seen(LinkSet *s, dev_t dev, ino_t ino) {   // 1 if seen before; records it if not
+    if ((s->n + 1) * 2 > s->cap) {
+        size_t cap = s->cap ? s->cap * 2 : 1024;
+        LinkSlot *v = calloc(cap, sizeof *v);
+        if (!v) return 0;
+        for (size_t k = 0; k < s->cap; k++) {
+            if (!s->v[k].used) continue;
+            size_t j = link_hash(s->v[k].dev, s->v[k].ino) & (cap - 1);
+            while (v[j].used) j = (j + 1) & (cap - 1);
+            v[j] = s->v[k];
+        }
+        free(s->v);
+        s->v = v;
+        s->cap = cap;
+    }
+    size_t j = link_hash(dev, ino) & (s->cap - 1);
+    while (s->v[j].used) {
+        if (s->v[j].dev == dev && s->v[j].ino == ino) return 1;
+        j = (j + 1) & (s->cap - 1);
+    }
+    s->v[j].used = 1;
+    s->v[j].dev = dev;
+    s->v[j].ino = ino;
+    s->n++;
+    return 0;
+}
+
+typedef struct {
+    FILE *out;
+    size_t rootlen;                 // test builds: length of the prefix left out of printed paths
+    dev_t self_dev;                 // the listing itself, which is never listed
+    ino_t self_ino;
+    LinkSet links;
+    uint64_t items, errors, next_prog;
+    int section;
+    uint64_t sec_kb, sec_items;
+} Tree;
+
+static const char *tree_shown(const Tree *t, const char *path) {
+    const char *p = path + t->rootlen;
+    return *p ? p : "/";
+}
+
+static uint64_t tree_kb(const struct stat *st) { return ((uint64_t)st->st_blocks + 1) / 2; }   // du -k rounds up
+
+static void tree_part_done(Tree *t) {
+    if (t->section < 0) return;
+    emit("DONE\t%s\t%llu\t%llu", k_tree_sections[t->section].id,
+         (unsigned long long)t->sec_kb, (unsigned long long)t->sec_items);
+}
+
+static void tree_part_start(Tree *t, int index) {
+    tree_part_done(t);
+    t->section = index;
+    t->sec_kb = 0;
+    t->sec_items = 0;
+    emit("STEP\t%s\t%s", k_tree_sections[index].id, k_tree_sections[index].title);
+}
+
+static void tree_line(Tree *t, uint64_t kb, const char *path, uint64_t own_kb) {
+    fprintf(t->out, "%llu\t%s\n", (unsigned long long)kb, tree_shown(t, path));
+    t->items++;
+    t->sec_items++;
+    t->sec_kb += own_kb;
+    if (t->items >= t->next_prog) {
+        emit("PROG\t%llu\t%llu", (unsigned long long)t->items, (unsigned long long)t->sec_items);
+        t->next_prog += 25000;
+    }
+}
+
+static const char *const *g_tree_last;   // the order list for the folder being sorted
+
+static int tree_rank(const char *name) {
+    if (g_tree_last) for (int i = 0; g_tree_last[i]; i++) if (strcmp(name, g_tree_last[i]) == 0) return i + 1;
+    return 0;
+}
+
+static int tree_cmp(const void *a, const void *b) {
+    const char *x = *(const char *const *)a, *y = *(const char *const *)b;
+    int rx = tree_rank(x), ry = tree_rank(y);
+    return rx != ry ? rx - ry : strcmp(x, y);
+}
+
+// Lists the folder at `path` (which is `len` long, in a PATH_MAX buffer) and everything in it.
+// Returns its total size in KB, as du would print it.
+static uint64_t tree_dir(Tree *t, char *path, size_t len, const struct stat *st) {
+    const char *shown = tree_shown(t, path);
+    for (int i = t->section + 1; i < TREE_SECTIONS; i++) {
+        if (strcmp(shown, k_tree_sections[i].start) == 0) { tree_part_start(t, i); break; }
+    }
+    uint64_t own = tree_kb(st), total = own;
+
+    DIR *d = opendir(path);
+    if (!d) {
+        t->errors++;
+        tree_line(t, total, path, own);
+        return total;
+    }
+    char **names = NULL;
+    size_t n = 0, cap = 0;
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        if (n == cap) {
+            size_t ncap = cap ? cap * 2 : 64;
+            char **v = realloc(names, ncap * sizeof *v);
+            if (!v) break;
+            names = v;
+            cap = ncap;
+        }
+        if ((names[n] = strdup(de->d_name)) != NULL) n++;
+    }
+    closedir(d);
+    g_tree_last = NULL;
+    for (const TreeOrder *o = k_tree_order; o->parent; o++) if (strcmp(shown, o->parent) == 0) g_tree_last = o->last;
+    if (n > 1) qsort(names, n, sizeof *names, tree_cmp);
+    g_tree_last = NULL;
+
+    int slash = !(len > 0 && path[len - 1] == '/');
+    for (size_t i = 0; i < n; i++) {
+        size_t nl = strlen(names[i]);
+        if (len + (size_t)slash + nl + 1 > PATH_MAX) {
+            t->errors++;
+            free(names[i]);
+            continue;
+        }
+        if (slash) path[len] = '/';
+        memcpy(path + len + slash, names[i], nl + 1);
+        free(names[i]);
+        struct stat cs;
+        if (lstat(path, &cs) != 0) {
+            t->errors++;
+        } else if (cs.st_dev == t->self_dev && cs.st_ino == t->self_ino) {
+            // the listing being written
+        } else if (S_ISDIR(cs.st_mode)) {
+            total += tree_dir(t, path, len + (size_t)slash + nl, &cs);
+        } else if (cs.st_nlink > 1 && link_seen(&t->links, cs.st_dev, cs.st_ino)) {
+            // another name for a file already counted
+        } else {
+            uint64_t kb = tree_kb(&cs);
+            total += kb;
+            tree_line(t, kb, path, kb);
+        }
+        path[len] = '\0';
+    }
+    free(names);
+    tree_line(t, total, path, own);
+    return total;
+}
+
+static int do_tree(const char *out_path) {
+    char mobile[PATH_MAX], mobile2[PATH_MAX];
+    rp(mobile, "/private/var/mobile/");
+    rp(mobile2, "/var/mobile/");
+    if (!(starts_with(out_path, mobile) || starts_with(out_path, mobile2)) || !ends_with_ci(out_path, ".txt")
+        || strstr(out_path, "/../")) {
+        emit("ERR\tThe tree can only be saved as a .txt file inside /var/mobile");
+        return 4;
+    }
+    int fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        emit("ERR\tCouldn't create the file: %s", strerror(errno));
+        return 5;
+    }
+#ifndef CAZ_TEST
+    if (fchown(fd, 501, 501) != 0) emit("LOG\tThe file stays owned by root: %s", strerror(errno));   // so Files can delete it
+#endif
+    FILE *out = fdopen(fd, "w");
+    if (!out) {
+        close(fd);
+        emit("ERR\tCouldn't write the file: %s", strerror(errno));
+        return 5;
+    }
+    static char buffer[1 << 20];
+    setvbuf(out, buffer, _IOFBF, sizeof buffer);
+
+    Tree t;
+    memset(&t, 0, sizeof t);
+    t.out = out;
+    t.rootlen = strlen(g_root);
+    t.section = -1;
+    t.next_prog = 25000;
+    struct stat self;
+    if (fstat(fd, &self) == 0) { t.self_dev = self.st_dev; t.self_ino = self.st_ino; }
+
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", g_root[0] ? g_root : "/");
+    struct stat root;
+    if (lstat(path, &root) != 0) {
+        emit("ERR\tCouldn't read /: %s", strerror(errno));
+        fclose(out);
+        return 6;
+    }
+    emit("LOG\tListing every file and folder");
+    tree_part_start(&t, 0);
+    uint64_t total = tree_dir(&t, path, strlen(path), &root);
+    tree_part_done(&t);
+    free(t.links.v);
+
+    int failed = fflush(out) != 0 || ferror(out);
+    struct stat done;
+    uint64_t bytes = fstat(fd, &done) == 0 ? (uint64_t)done.st_size : 0;
+    fclose(out);
+    if (failed) {
+        emit("ERR\tThe file couldn't be written completely (is the phone full?)");
+        return 7;
+    }
+    char h[32];
+    emit("LOG\t%llu items, %s in total%s", (unsigned long long)t.items, human(total * 1024, h, sizeof h),
+         t.errors ? " (some folders couldn't be read)" : "");
+    emit("SAVED\t%s\t%llu\t%llu", out_path, (unsigned long long)bytes, (unsigned long long)t.items);
+    return 0;
+}
+
 // ---------------------------------------------------------------- updates
 
 // Installs a downloaded Caz.tipa with TrollStore's installer (trollstorehelper, inside TrollStore.app),
@@ -856,7 +1114,7 @@ int main(int argc, char **argv) {
     }
 #endif
     if (argc < 2) {
-        emit("ERR\tusage: cazhelper scan | clean <categories> | autotrim status|enable|disable | install-update <tipa> | version");
+        emit("ERR\tusage: cazhelper scan | clean <categories> | autotrim status|enable|disable | install-update <tipa> | tree <txt> | version");
         return 2;
     }
     if (strcmp(argv[1], "version") == 0) { emit("LOG\tcazhelper %s", CAZ_VERSION); return 0; }
@@ -864,6 +1122,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "clean") == 0 && argc >= 3) { parse_options(argc, argv, 3); do_clean(argv[2]); return 0; }
     if (strcmp(argv[1], "autotrim") == 0 && argc >= 3) return do_autotrim(argv[2]);
     if (strcmp(argv[1], "install-update") == 0 && argc >= 3) return do_install_update(argv[2]);
+    if (strcmp(argv[1], "tree") == 0 && argc >= 3) return do_tree(argv[2]);
     emit("ERR\tUnknown command: %s", argv[1]);
     return 2;
 }

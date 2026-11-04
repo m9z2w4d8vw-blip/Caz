@@ -125,7 +125,7 @@ final class UpdateModel: ObservableObject {
                 if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                     problem = "GitHub answered with error \(http.statusCode)."
                 } else {
-                    let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
                     let destination = folder.appendingPathComponent("Caz-update.tipa")
                     try? FileManager.default.removeItem(at: destination)
                     do {

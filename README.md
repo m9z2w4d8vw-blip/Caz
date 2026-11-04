@@ -48,6 +48,7 @@ also tested against a rebuilt copy of a real iPhone's file system.
 | 🔍 **Scan first, then choose** | Every category shows its size before anything is deleted. Turn categories, or single apps, off. |
 | 🧹 **One-tap clean** | **Clean** opens into a log that checks off each category as it finishes. |
 | 🧾 **System logs under control** | Clears the diagnostic log archive without a reboot, and can keep it to a day's worth (Dopamine). |
+| 🌳 **Exports the file tree** | Lists every file and folder with its size, like `sudo du -ak /` over SSH, into its folder in Files. |
 | ⬇️ **Updates itself** | When a newer release is on GitHub, **Update Available** shows the changelog and installs it, like Dopamine. |
 | 🛡️ **Careful by design** | A fixed list of paths, no symlinks followed, files in use left alone, SpringBoard and Jetsam reports kept. |
 | 📦 **Leftovers too** | Abandoned downloads, IPAs left in app inboxes, and temp copies that Photos and other apps never deleted. |
@@ -122,6 +123,20 @@ Caz checks this repository's releases when it opens, the way Dopamine checks its
 3. If TrollStore's installer can't be reached, Caz asks TrollStore to install it from the link instead, and without
    TrollStore it opens the releases page.
 
+
+### Exporting the file tree
+
+Caz can list every file and folder on your iPhone with its size, the same listing `sudo du -ak / > file.txt`
+makes over SSH, without a computer.
+
+1. Open **Settings**, then **View Log**, and scroll to the bottom.
+2. Tap **Export Tree**. The window closes and the big button opens into the same log a scan uses, with one line
+   per part of the phone (system files, preboot, system data, installed apps, your library and media, and app
+   data) as each is listed.
+3. The file lands in **Files › On My iPhone › Caz**, named like `Caz tree 2026-11-04 16.35.txt`. On a full phone
+   it's about 150 MB; delete it from Files when you're done.
+
+Each line is the size in KB, a tab, then the path. Folders come after their contents and `/` is last.
 ### What gets cleaned
 
 | Category | Clears | Comes back? | Default |
@@ -242,12 +257,21 @@ sequenceDiagram
 | `CAT <category> <bytes> <files>` | Scan result for one category |
 | `APP <bundle id> <bytes> <name> <note>` | Scan result for one app's caches; the note says what's kept |
 | `SKIP <bundle id> <bytes> <name> <reason>` | An installed app whose cache is never touched |
+| `STEP <id> <title>` | Tree export: one part of the phone starts |
+| `PROG <items> <items in this part>` | Tree export: every 25,000 items |
+| `DONE <id> <kb> <items>` | Tree export: one part of the phone is listed |
+| `SAVED <path> <bytes> <items>` | Tree export: the listing is written |
 | `FREED <category> <bytes> <files> <errors>` | Clean result for one category |
 | `AUTOTRIM on\|off\|unavailable` | State of the log-trim job |
 
 **Updates** use `cazhelper install-update <path>`: it finds TrollStore's installer (`trollstorehelper`, inside
 `TrollStore.app`) by its bundle ID and runs it in its own session, so the install finishes even when it closes Caz.
 The helper only accepts a `.tipa` or `.ipa` inside `/var/mobile`.
+
+**The tree export** uses `cazhelper tree <path>`. It writes the listing in `du -ak` order and counts hard-linked
+files once, as `du` does. It never follows a symlink, leaves its own output file out of the listing, and hands that
+file to the `mobile` user so you can delete it in Files. It only writes a `.txt` file inside `/var/mobile`. Tested
+against GNU `du -ak` on a rebuilt copy of a real iPhone's file system, it matches path for path and size for size.
 
 **The log-trim job** is `/var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist`. It runs
 `find /private/var/db/diagnostics -name '*.tracev3' -mmin +1440 -delete` at load and every 6 hours. Turning the

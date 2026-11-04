@@ -148,7 +148,10 @@ struct ContentView: View {
         case .settings:
             SettingsWindow(model: model, openLog: { self.window = .log })
         case .log:
-            LogWindow(model: model, onBack: { self.window = .settings })
+            LogWindow(model: model, onBack: { self.window = .settings }, onExport: {
+                self.window = nil
+                model.exportTree()
+            })
         }
     }
 

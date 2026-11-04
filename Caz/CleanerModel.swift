@@ -40,6 +40,7 @@ enum Phase: Equatable {
     case scanning
     case scanned
     case cleaning
+    case exporting
     case done(freed: Int64)
 }
 
@@ -98,6 +99,8 @@ final class CleanerModel: ObservableObject {
     }
 
     private var freedTotal: Int64 = 0
+    private var phaseBeforeExport: Phase = .idle
+    private var partTitles: [String: String] = [:]
     private let queue = DispatchQueue(label: "com.parv.caz.helper", qos: .userInitiated)
 
     private enum Keys {
@@ -106,6 +109,7 @@ final class CleanerModel: ObservableObject {
         static let excluded = "excludedApps"
         static let disabled = "disabledCategories"
         static let defaultExclusionsApplied = "defaultExclusionsApplied.v1"
+        static let migratedSettings = "migratedLegacySettings.v1"
     }
 
     /// Apps that start switched off in App Caches because they may keep downloads in their cache.
@@ -116,6 +120,7 @@ final class CleanerModel: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
+        Self.migrateLegacySettings(defaults)
         keepSpringBoard = defaults.object(forKey: Keys.keepSpringBoard) as? Bool ?? true
         closeApps = defaults.object(forKey: Keys.closeApps) as? Bool ?? true
         excluded = Set(defaults.stringArray(forKey: Keys.excluded) ?? [])
@@ -135,7 +140,7 @@ final class CleanerModel: ObservableObject {
 
     // MARK: - Derived values
 
-    var isBusy: Bool { phase == .scanning || phase == .cleaning }
+    var isBusy: Bool { phase == .scanning || phase == .cleaning || phase == .exporting }
 
     var appCacheBytes: Int64 {
         apps.filter { !excluded.contains($0.id) }.reduce(Int64(0)) { $0 + $1.bytes }
@@ -166,6 +171,8 @@ final class CleanerModel: ObservableObject {
     // MARK: - Actions
 
     func onAppear() {
+        // Caz's Documents folder is its folder in Files › On My iPhone.
+        try? FileManager.default.createDirectory(at: Self.exportsFolder, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: helperPath) {
             problem = "The root helper is missing from the app."
         }
@@ -243,6 +250,34 @@ final class CleanerModel: ObservableObject {
             } else {
                 self.append("Cleaning stopped (code \(status)). Lines starting with ! show what failed.")
                 self.failLyrics("Cleaning stopped")
+            }
+            self.collapseSoon()
+        }
+    }
+
+    /// Lists every file and folder on the phone, in the format of `sudo du -ak /`, into Caz's folder
+    /// in Files › On My iPhone. Progress shows in the same opening log as a scan or a clean.
+    func exportTree() {
+        guard !isBusy else { return }
+        let folder = Self.exportsFolder
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("Caz tree \(Self.fileStamp()).txt")
+        phaseBeforeExport = phase
+        phase = .exporting
+        partTitles.removeAll()
+        lyrics.removeAll()
+        sheetTitle = "Exporting"
+        sheetVisible = true
+        append("Exporting the file tree to \(file.lastPathComponent)…")
+        runHelper(["tree", file.path]) { [weak self] status in
+            guard let self = self else { return }
+            self.phase = self.phaseBeforeExport
+            if status == 0 {
+                self.finishLyrics(success: "Saved to On My iPhone › Caz")
+            } else {
+                self.append("Export stopped (code \(status)).")
+                self.failLyrics("Export stopped")
+                try? FileManager.default.removeItem(at: file)
             }
             self.collapseSoon()
         }
@@ -376,6 +411,22 @@ final class CleanerModel: ObservableObject {
             }
             if fields[1] == "appcache" { apps.removeAll() }
             finishLyric("\(title(for: fields[1])): freed \(Self.format(bytes))")
+        case "STEP" where fields.count >= 3:
+            partTitles[fields[1]] = fields[2]
+            startLyric(fields[2])
+        case "PROG" where fields.count >= 3:
+            if let items = Int(fields[2]), let index = lyrics.lastIndex(where: { $0.status == .running }) {
+                let title = lyrics[index].text.components(separatedBy: " · ").first ?? lyrics[index].text
+                lyrics[index].text = "\(title) · \(Self.count(items)) items"
+            }
+        case "DONE" where fields.count >= 4:
+            let title = partTitles[fields[1]] ?? fields[1]
+            let bytes = (Int64(fields[2]) ?? 0) * 1024
+            append("\(title): \(Self.format(bytes)), \(Self.count(Int(fields[3]) ?? 0)) items")
+            finishLyric("\(title): \(Self.format(bytes))")
+        case "SAVED" where fields.count >= 4:
+            let name = URL(fileURLWithPath: fields[1]).lastPathComponent
+            append("Saved \(name): \(Self.format(Int64(fields[2]) ?? 0)), \(Self.count(Int(fields[3]) ?? 0)) lines.")
         case "AUTOTRIM" where fields.count >= 2:
             switch fields[1] {
             case "on": autoTrim = .on
@@ -392,6 +443,37 @@ final class CleanerModel: ObservableObject {
     static func format(_ bytes: Int64) -> String {
         if bytes <= 0 { return "0 KB" }   // the formatter would say "Zero KB"
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    static func count(_ number: Int) -> String {
+        NumberFormatter.localizedString(from: NSNumber(value: number), number: .decimal)
+    }
+
+    /// "2026-11-04 16.35" (no colons, which file names can't safely hold).
+    static func fileStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH.mm"
+        return formatter.string(from: Date())
+    }
+
+    /// Caz's folder in Files › On My iPhone: its own Documents folder.
+    static var exportsFolder: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    /// Caz used to run without a data folder of its own, so its settings were kept in
+    /// /var/mobile/Library/Preferences. Now that it has one, bring them over once.
+    private static func migrateLegacySettings(_ defaults: UserDefaults) {
+        guard !defaults.bool(forKey: Keys.migratedSettings) else { return }
+        defaults.set(true, forKey: Keys.migratedSettings)
+        let home = NSHomeDirectory()
+        guard home != "/var/mobile", home != "/private/var/mobile",
+              let old = NSDictionary(contentsOfFile: "/var/mobile/Library/Preferences/com.parv.caz.plist") as? [String: Any]
+        else { return }
+        for (key, value) in old where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+        }
     }
 
     static func currentFreeBytes() -> Int64 {
