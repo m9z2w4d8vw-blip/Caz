@@ -24,8 +24,6 @@ struct HeaderView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 5)
-        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
-        .shadow(color: .black.opacity(0.3), radius: 30)
     }
 }
 
