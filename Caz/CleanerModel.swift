@@ -75,6 +75,9 @@ final class CleanerModel: ObservableObject {
         CleanCategory(id: "installers", title: "Leftover installers",
                       detail: "IPAs and debs",
                       symbol: "shippingbox"),
+        CleanCategory(id: "trash", title: "Recently Deleted",
+                      detail: "Deleted in Files",
+                      symbol: "trash"),
     ]
 
     @Published var categories: [CleanCategory] = []

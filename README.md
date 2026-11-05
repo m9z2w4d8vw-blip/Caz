@@ -14,7 +14,7 @@
   <a href="https://github.com/m9z2w4d8vw-blip/Caz/releases/latest"><img src="https://img.shields.io/github/v/release/m9z2w4d8vw-blip/Caz?label=download&color=FFB21E&logo=github" alt="download"></a>
   <img src="https://img.shields.io/badge/iOS-16.0%E2%80%9317.0-1B1446?logo=apple&logoColor=white" alt="iOS 16.0 to 17.0">
   <img src="https://img.shields.io/badge/app-TrollStore-FFB21E" alt="TrollStore app">
-  <img src="https://img.shields.io/badge/auto--trim-Dopamine%20rootless-5B2BB5" alt="Dopamine rootless for auto-trim">
+  <img src="https://img.shields.io/badge/auto--trim-rootless%20jailbreak-5B2BB5" alt="rootless jailbreak for auto-trim">
 </p>
 
 <p align="center">
@@ -44,12 +44,12 @@ also tested against a rebuilt copy of a real iPhone's file system.
 
 | | |
 | --- | --- |
-| 🎨 **Dopamine-style interface** | The menu, the button that opens into a live log, and the windows follow Dopamine's design, in Caz's yellow. |
+| 🎨 **A calm, focused interface** | One menu, one button that opens into a live log, and windows that float over a soft yellow backdrop. |
 | 🔍 **Scan first, then choose** | Every category shows its size before anything is deleted. Turn categories, or single apps, off. |
 | 🧹 **One-tap clean** | **Clean** opens into a log that checks off each category as it finishes. |
-| 🧾 **System logs under control** | Clears the diagnostic log archive without a reboot, and can keep it to a day's worth (Dopamine). |
+| 🧾 **System logs under control** | Clears the diagnostic log archive without a reboot, and can keep it to a day's worth (rootless jailbreak). |
 | 🌳 **Exports the file tree** | Lists every file and folder with its size, like `sudo du -ak /` over SSH, into its folder in Files. |
-| ⬇️ **Updates itself** | When a newer release is on GitHub, **Update Available** shows the changelog and installs it, like Dopamine. |
+| ⬇️ **Updates itself** | When a newer release is on GitHub, **Update Available** shows the changelog and installs it. |
 | 🛡️ **Careful by design** | A fixed list of paths, no symlinks followed, files in use left alone, SpringBoard and Jetsam reports kept. |
 | 📦 **Leftovers too** | Abandoned downloads, IPAs left in app inboxes, and temp copies that Photos and other apps never deleted. |
 
@@ -69,7 +69,7 @@ also tested against a rebuilt copy of a real iPhone's file system.
 3. **Scan.** Open Caz and tap **Scan** in the menu. Nothing is deleted yet; every category gets a size.
 4. **Choose and clean.** Turn off anything you want to keep in **Categories** or **App Caches**, then tap
    **Clean** at the bottom. It shows the total.
-5. **Optional.** On a Dopamine jailbreak, turn on **Settings > Trim logs automatically**.
+5. **Optional.** On a rootless jailbreak, turn on **Settings > Trim logs automatically**.
 
 > [!NOTE]
 > Caz needs TrollStore. Sideloading it with AltStore or Sideloadly installs it, but strips the permissions it needs to
@@ -98,12 +98,11 @@ sudo rm /var/jb/Library/LaunchDaemons/com.parv.caz.logtrim.plist
 
 ### The main screen
 
-The layout follows Dopamine's: the name and two lines at the top, a menu in the middle, and one big button at the
-bottom.
+The layout is simple: the name and two lines at the top, a menu in the middle, and one big button at the bottom.
 
 - **The lines under the name** show the iOS version, then the author. If something's wrong, such as Caz not having
   root access, the second line says so instead.
-- **The menu** has the same four-row layout as Dopamine's: **Settings**, **Scan**, **App Caches** and **Categories**.
+- **The menu** has four rows: **Settings**, **Scan**, **App Caches** and **Categories**.
   Settings, App Caches and Categories open as windows in the middle of the screen; tap outside a window to close it.
   **Scan** measures every category; scan again any time to refresh the sizes.
 - **The big button** always cleans. It's greyed out until a scan finds something, then reads **Clean 9.8 GB**.
@@ -114,7 +113,7 @@ bottom.
 
 ### Updates
 
-Caz checks this repository's releases when it opens, the way Dopamine checks its own. When there's a newer version,
+Caz checks this repository's releases when it opens. When there's a newer version,
 **Update Available** slides in above **Clean**.
 
 1. Tap it to see the **changelog**: every release since yours, newest first.
@@ -149,6 +148,12 @@ Each line is the size in KB, a tab, then the path. Folders come after their cont
 | **Messages previews** | Attachment thumbnails (not the attachments) | As you scroll through chats | On |
 | **Maps tiles** | The Apple Maps tile cache | As you browse the map | Off |
 | **Leftover installers** | `.ipa`, `.tipa` and `.deb` files left in app inboxes | No | Off |
+| **Recently Deleted** | Files waiting in the Files app's Recently Deleted, from On My iPhone and from apps' folders | As you delete more | On |
+
+> [!NOTE]
+> Emptying **Recently Deleted** is like tapping **Delete All** there: those files can't be recovered afterwards. Turn the
+> category off in **Categories** if you want to keep the 30-day safety net. iCloud Drive's Recently Deleted is left to
+> iCloud, which keeps it in step with its servers.
 
 > [!TIP]
 > Some apps keep downloads in their cache folder. Caz checks which of these are installed and handles them:
@@ -169,7 +174,7 @@ Each line is the size in KB, a tab, then the path. Folders come after their cont
 | --- | --- | --- |
 | **Keep SpringBoard and Jetsam reports** | On | Crash reports for SpringBoard and memory pressure stay, for debugging tweaks and resprings |
 | **Close apps before clearing their caches** | On | Force-closes the apps whose caches are about to be cleared |
-| **Trim logs automatically** | Off | Every 6 hours, deletes log files older than a day. Needs Dopamine |
+| **Trim logs automatically** | Off | Every 6 hours, deletes log files older than a day. Needs a rootless jailbreak |
 
 **View Log**, at the bottom of Settings, shows every line from the last scan or clean.
 
@@ -182,7 +187,7 @@ Each line is the size in KB, a tab, then the path. Folders come after their cont
 | Lines in **View Log** start with `!` | Some files were in use or protected | Close the apps involved and clean again. |
 | *Freed* is less than the scan showed | Files changed or were in use between the scan and the clean | Normal for caches being written to. Scan again to see what's left. |
 | The space comes back within days | Logs and app caches refill as you use the phone | Turn on **Trim logs automatically**. If one app refills fast, the cause is that app. |
-| **Trim logs automatically** is greyed out | No Dopamine jailbreak was found | It needs rootless Dopamine; the rest of Caz works without it. |
+| **Trim logs automatically** is greyed out | No rootless jailbreak was found | It needs one, such as Dopamine or palera1n; the rest of Caz works without it. |
 | An app lost offline content | It keeps downloads in its cache folder | Turn that app off in the **App caches** list. |
 | Map tiles load slowly afterwards | The tile cache is rebuilding | It refills as you browse. Leave **Maps tiles** off if it bothers you. |
 
@@ -196,7 +201,7 @@ flowchart LR
         APP["Caz app<br/>scan, choose, clean"] -->|"started as root<br/>through TrollStore"| HELPER["cazhelper<br/>measures and deletes"]
         HELPER -->|"one line per event"| APP
         HELPER --> FILES["Logs, caches, temp files,<br/>leftover installers"]
-        HELPER -.->|"Trim logs automatically"| JOB["launchd job<br/>(Dopamine only)"]
+        HELPER -.->|"Trim logs automatically"| JOB["launchd job<br/>(rootless jailbreak)"]
         JOB -.->|"every 6 hours"| FILES
     end
 ```
@@ -240,6 +245,7 @@ sequenceDiagram
 | Messages previews | `mobile/Library/Caches/com.apple.MobileSMS/Previews` | Messages is closed first |
 | Maps tiles | `com.apple.geod/MapTiles`, `GeoServices` | Maps is closed first; the tile service restarts after |
 | Leftover installers | `Documents/Inbox` of each app and jailbreak app | `.ipa`, `.tipa`, `.deb` untouched for an hour |
+| Recently Deleted | `File Provider Storage/.Trash` of the Files app's storage (On My iPhone), and `Documents/.Trash` of each app | Files is closed first; iCloud Drive's trash is never touched |
 
 **Safety rules** (all in `RootHelper/main.c`):
 
@@ -293,7 +299,7 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 │   ├── UpdateModel.swift          checks GitHub releases, downloads and installs updates
 │   ├── UpdateViews.swift          the changelog, the download ring and the update buttons
 │   ├── AppIcons.h/.m              looks up app icons for the App Caches list
-│   ├── Resources/                 LICENSE-Dopamine.txt and the wordmark font
+│   ├── Resources/                 the bundled license and the wordmark font
 │   └── Assets.xcassets            the app icon, the yellow backdrop and the title
 ├── RootHelper/                cazhelper (C) and its entitlements
 ├── Config/                    Info.plist and the app's entitlements
@@ -307,13 +313,11 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 
 ## Credits
 
-Caz's interface is based on [Dopamine](https://github.com/opa334/Dopamine)'s, by Lars Fröder (opa334), used under
-the MIT License, which ships inside the app bundle and in `Caz/Resources/LICENSE-Dopamine.txt`. Caz starts its root helper the way TrollStore apps do.
+Caz starts its root helper the way TrollStore apps do.
 
-Dopamine's title is a picture, not live text: `Dopamine.imageset` holds it at 1x, 2x and 3x, drawn in Fonarto
-Regular. Caz's title works the same way. `Caz/Assets.xcassets/Wordmark.imageset` holds "Caz" drawn in
-[Fonarto](https://www.fontspace.com/fonarto-2-font-f104632) Regular with the letter spacing measured from Dopamine's
-title (-0.65% of the em), shown 40 pt tall like Dopamine's. The font file itself isn't shipped, only the picture.
+Caz's title is a picture, not live text. `Caz/Assets.xcassets/Wordmark.imageset` holds "Caz" drawn in
+[Fonarto](https://www.fontspace.com/fonarto-2-font-f104632) Regular with slightly tightened letter spacing (-0.65% of
+the em), shown 40 pt tall. The font file itself isn't shipped, only the picture.
 Fonarto is by Locomotype (Arwan Sutanto) and is free for personal and commercial use.
 
 To redraw it, run `scripts/make_wordmark.py` with the font file (it needs Pillow). If the image is ever missing, Caz
@@ -331,12 +335,12 @@ Every push runs `.github/workflows/build.yml` on macOS with Xcode 16.4. The buil
 1. generates the Xcode project with XcodeGen;
 2. builds the app with `xcodebuild` and the helper with `clang`;
 3. signs both with `ldid`, using their entitlements, and packages `Caz.tipa` and `Caz.ipa`;
-4. checks the package: both binaries, their entitlements, the icon, the bundled Dopamine license and the version;
+4. checks the package: both binaries, their entitlements, the icon, the bundled license and the version;
 5. uploads it as the `Caz-app` artifact.
 
 Each push to `main` then publishes a full release named after its version (`1.0.57`, tag `v1.0.57`) with both files
 and `SHA256SUMS`. Its notes are the commit messages of that push, which is what the in-app changelog shows. Caz's
-updater ignores pre-releases, as Dopamine's does. Versions are `MARKETING_VERSION` from `project.yml` plus the run
+updater ignores pre-releases. Versions are `MARKETING_VERSION` from `project.yml` plus the run
 number, so every build is newer than the last; keep `MARKETING_VERSION` to two parts. Pushing a tag such as `v1.2.0`
 publishes that tag instead; bump `MARKETING_VERSION` to `1.2` afterwards so later builds stay newer.
 

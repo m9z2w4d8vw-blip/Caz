@@ -485,6 +485,30 @@ static void cat_installers(int clean, Totals *t) {
     each_container("/private/var/mobile/Library/Application Support/Containers", inbox_in, clean, t);
 }
 
+// Files' Recently Deleted. What you delete in On My iPhone waits in the Files app's own storage
+// (File Provider Storage/.Trash); what you delete inside an app's folder waits in that app's
+// Documents/.Trash. Emptying them is like Delete All in Recently Deleted. iCloud Drive's trash is
+// left alone, because iCloud keeps it in step with its servers.
+static void trash_in(const char *c, int clean, Totals *t) {
+    char p[PATH_MAX];
+    pathf(p, "%s/Documents/.Trash", c);
+    contents_at(p, clean, t);
+}
+
+static void cat_trash(int clean, Totals *t) {
+    if (clean) kill_procs(m_exact, "/Applications/DocumentsApp.app/DocumentsApp");   // Files reloads the list
+    Boxes groups;
+    boxes_load("/private/var/mobile/Containers/Shared/AppGroup", &groups, 0);
+    const Box *local = box_by_id(&groups, "group.com.apple.FileProvider.LocalStorage");
+    if (local) {
+        char p[PATH_MAX];
+        pathf(p, "%s/File Provider Storage/.Trash", local->path);
+        contents_at(p, clean, t);
+    }
+    free(groups.v);
+    each_container("/private/var/mobile/Containers/Data/Application", trash_in, clean, t);
+}
+
 static void cat_previews(int clean, Totals *t) {
     if (clean) kill_procs(m_exact, "/Applications/MobileSMS.app/MobileSMS");
     op_contents("/private/var/mobile/Library/Caches/com.apple.MobileSMS/Previews", clean, t);
@@ -630,6 +654,7 @@ static const Category k_categories[] = {
     { "installers", "Leftover installers", cat_installers },
     { "previews",   "Messages previews",   cat_previews },
     { "maps",       "Maps tiles",          cat_maps },
+    { "trash",      "Recently Deleted",    cat_trash },
     { "appcache",   "App caches",          cat_appcache },
     { NULL, NULL, NULL }
 };
