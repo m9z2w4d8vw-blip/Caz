@@ -299,6 +299,7 @@ setting off also removes the older hand-made `com.parv.logtrim` job, if there is
 ├── Config/                    Info.plist and the app's entitlements
 ├── scripts/package.sh         signs both binaries and packages Caz.tipa and Caz.ipa
 ├── scripts/make_wordmark.py   draws the title image from the Fonarto font file
+├── scripts/make_icon.py       draws the app icon over a square of the backdrop
 ├── docs/images/               images for this README
 ├── project.yml                XcodeGen spec (the .xcodeproj is generated, not committed)
 └── .github/workflows/         CI: build, check, publish
