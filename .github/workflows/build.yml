@@ -114,6 +114,8 @@ jobs:
           ldid -e "$bundle/Caz" > app-entitlements.plist
           grep -q 'com.apple.private.persona-mgmt' app-entitlements.plist \
             || { echo "::error::Caz is not signed with its entitlements"; cat app-entitlements.plist; exit 1; }
+          grep -q 'com.apple.private.security.storage.AppDataContainers' app-entitlements.plist \
+            || { echo "::error::Caz is missing the entitlement it needs to use its own folder"; exit 1; }
           ldid -e "$bundle/cazhelper" > helper-entitlements.plist
           grep -q 'com.apple.private.security.no-sandbox' helper-entitlements.plist \
             || { echo "::error::cazhelper is not signed with its entitlements"; cat helper-entitlements.plist; exit 1; }

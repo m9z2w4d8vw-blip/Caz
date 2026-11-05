@@ -972,6 +972,20 @@ static int do_tree(const char *out_path) {
         emit("ERR\tThe tree can only be saved as a .txt file inside /var/mobile");
         return 4;
     }
+    // Caz's Documents folder may not exist yet: create it (just that folder), owned by mobile.
+    char folder[PATH_MAX];
+    snprintf(folder, sizeof folder, "%s", out_path);
+    char *cut = strrchr(folder, '/');
+    if (cut && cut != folder) {
+        *cut = '\0';
+        struct stat fs;
+        if (lstat(folder, &fs) != 0 && mkdir(folder, 0755) == 0) {
+#ifndef CAZ_TEST
+            if (chown(folder, 501, 501) != 0) emit("LOG\tThe folder stays owned by root: %s", strerror(errno));
+#endif
+            emit("LOG\tCreated %s", folder);
+        }
+    }
     int fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         emit("ERR\tCouldn't create the file: %s", strerror(errno));

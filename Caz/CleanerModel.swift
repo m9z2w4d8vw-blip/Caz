@@ -172,7 +172,15 @@ final class CleanerModel: ObservableObject {
 
     func onAppear() {
         // Caz's Documents folder is its folder in Files › On My iPhone.
-        try? FileManager.default.createDirectory(at: Self.exportsFolder, withIntermediateDirectories: true)
+        let folder = Self.exportsFolder
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        } catch {
+            append("! Caz can't open its folder at \(folder.path): \(error.localizedDescription)")
+        }
+        if !Self.hasOwnFolder {
+            append("! Caz has no data folder of its own, so exports go to \(folder.path) and won't show in Files. Reinstall Caz.tipa with TrollStore.")
+        }
         if !FileManager.default.fileExists(atPath: helperPath) {
             problem = "The root helper is missing from the app."
         }
@@ -273,7 +281,7 @@ final class CleanerModel: ObservableObject {
             guard let self = self else { return }
             self.phase = self.phaseBeforeExport
             if status == 0 {
-                self.finishLyrics(success: "Saved to On My iPhone › Caz")
+                self.finishLyrics(success: Self.hasOwnFolder ? "Saved to On My iPhone › Caz" : "Saved to \(folder.path)")
             } else {
                 self.append("Export stopped (code \(status)).")
                 self.failLyrics("Export stopped")
@@ -456,6 +464,9 @@ final class CleanerModel: ObservableObject {
         formatter.dateFormat = "yyyy-MM-dd HH.mm"
         return formatter.string(from: Date())
     }
+
+    /// Whether iOS gave Caz a data folder of its own (the one Files shows), not /var/mobile.
+    static var hasOwnFolder: Bool { exportsFolder.path.contains("/Containers/Data/Application/") }
 
     /// Caz's folder in Files › On My iPhone: its own Documents folder.
     static var exportsFolder: URL {
